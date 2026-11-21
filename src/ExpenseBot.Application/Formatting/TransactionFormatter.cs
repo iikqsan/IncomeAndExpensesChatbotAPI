@@ -138,6 +138,7 @@ public sealed class TransactionFormatter(ICategoryProvider categories)
             sb.Append("\n<b>คำสั่งผู้ดูแล</b>\n");
             sb.Append("/users รายชื่อผู้ใช้และสถานะ\n");
             sb.Append("/block &lt;id&gt; ระงับสิทธิ์ผู้ใช้\n");
+            sb.Append("/unblock &lt;id&gt; คืนสิทธิ์ผู้ใช้ที่ถูกระงับ\n");
             sb.Append("/addkeyword &lt;หมวด&gt; &lt;คำ&gt; เพิ่ม keyword ให้หมวด\n");
         }
 
@@ -203,6 +204,14 @@ public sealed class TransactionFormatter(ICategoryProvider categories)
     public string UserBlocked(BotUser user) => $"ระงับสิทธิ์ {UserLabel(user)} แล้ว";
 
     public string UserAlreadyBlocked(BotUser user) => $"{UserLabel(user)} ถูกระงับอยู่แล้ว";
+
+    public string UserUnblocked(BotUser user) => $"คืนสิทธิ์ {UserLabel(user)} แล้ว";
+
+    public string UserNotBlocked(BotUser user) => user.Status == UserStatus.Pending
+        ? $"{UserLabel(user)} ยังรออนุมัติ ใช้ปุ่มอนุมัติในคำขอแทน"
+        : $"{UserLabel(user)} ไม่ได้ถูกระงับ";
+
+    public string UnblockedNotice() => "ผู้ดูแลคืนสิทธิ์ใช้งานแล้ว พิมพ์ /help เพื่อดูวิธีใช้";
 
     public string CannotBlockAdmin() => "ระงับสิทธิ์ผู้ดูแลหลักไม่ได้";
 

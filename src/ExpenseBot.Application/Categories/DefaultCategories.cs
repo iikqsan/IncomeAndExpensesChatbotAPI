@@ -41,7 +41,7 @@ public static class DefaultCategories
         },
         new()
         {
-            Id = "bills", Name = "บิล/ค่าน้ำ-ค่าไฟ", Type = CategoryType.Expense, SortOrder = 30,
+            Id = "bills", Name = "บิล", Type = CategoryType.Expense, SortOrder = 30,
             Keywords =
             [
                 "ค่าน้ำ", "ค่าไฟ", "ค่าเน็ต", "อินเทอร์เน็ต", "อินเตอร์เน็ต", "เน็ตบ้าน", "ค่าโทรศัพท์", "ค่าโทร",

@@ -25,6 +25,9 @@ public sealed class UpdateHandler(
     public const string ApprovePrefix = "approve:";
     public const string RejectPrefix = "reject:";
 
+    /// <summary>Event for messages the parser could not read; filter on it to tune the parser and keywords.</summary>
+    public static readonly EventId UnparsableMessage = new(1001, nameof(UnparsableMessage));
+
     public async Task HandleAsync(BotUpdate update, CancellationToken ct)
     {
         // 1. Private chats only. If someone added the bot to a group/channel, leave it.
@@ -142,7 +145,7 @@ public sealed class UpdateHandler(
                 await messenger.SendHtmlAsync(update.ChatId, formatter.Format(result.Transaction!), ct);
                 break;
             case RecordOutcome.ParseFailed:
-                logger.LogInformation("Unparsable message from {UserId}: {Text}", user.Id, text);
+                logger.LogInformation(UnparsableMessage, "Unparsable message from {UserId}: {Text}", user.Id, text);
                 await messenger.SendHtmlAsync(update.ChatId, formatter.ParseFailed(), ct);
                 break;
             case RecordOutcome.Duplicate:
@@ -160,7 +163,7 @@ public sealed class UpdateHandler(
                 await messenger.SendHtmlAsync(update.ChatId, formatter.Edited(result.Transaction!), ct);
                 break;
             case EditOutcome.ParseFailed:
-                logger.LogInformation("Unparsable edit from {UserId}: {Text}", user.Id, text);
+                logger.LogInformation(UnparsableMessage, "Unparsable edit from {UserId}: {Text}", user.Id, text);
                 await messenger.SendHtmlAsync(update.ChatId, formatter.EditParseFailed(result.Transaction!), ct);
                 break;
             case EditOutcome.NotFound:

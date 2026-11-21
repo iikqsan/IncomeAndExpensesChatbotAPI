@@ -1,4 +1,8 @@
 using System.Diagnostics;
+using System.Text.Encodings.Web;
+using System.Text.Json;
+using System.Text.Unicode;
+using Microsoft.Extensions.Logging.Console;
 using ExpenseBot.Api.Telegram;
 using ExpenseBot.Application.Abstractions;
 using ExpenseBot.Application.Categories;
@@ -9,10 +13,20 @@ using ExpenseBot.Application.Transactions;
 using ExpenseBot.Application.Updates;
 using ExpenseBot.Application.Users;
 using ExpenseBot.Infrastructure;
+using ExpenseBot.Infrastructure.Telegram;
 using Microsoft.AspNetCore.Hosting.Server;
 using Microsoft.AspNetCore.Hosting.Server.Features;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// When the JSON console formatter is on (set in the Dockerfile), write Thai text as-is instead of \uXXXX
+// so logs such as unparsable messages (EventId 1001) stay readable and searchable.
+builder.Services.PostConfigure<JsonConsoleFormatterOptions>(o =>
+    o.JsonWriterOptions = new JsonWriterOptions
+    {
+        Indented = o.JsonWriterOptions.Indented,
+        Encoder = JavaScriptEncoder.Create(UnicodeRanges.All),
+    });
 
 builder.Services.Configure<BotOptions>(builder.Configuration.GetSection(BotOptions.SectionName));
 builder.Services.AddSingleton(TimeProvider.System);
@@ -30,8 +44,18 @@ builder.Services.AddScoped<UpdateHandler>();
 // Infrastructure (Mongo + Telegram client)
 builder.Services.AddInfrastructure(builder.Configuration);
 
-// Presentation
-builder.Services.AddHostedService<PollingWorker>();
+// Presentation: Polling or Webhook. Both feed the same UpdateHandler.
+var telegramMode = builder.Configuration.GetValue("Telegram:Mode", TelegramMode.Polling);
+if (telegramMode == TelegramMode.Webhook)
+{
+    builder.Services.AddSingleton<UpdateQueue>();
+    builder.Services.AddHostedService<WebhookProcessor>();
+    builder.Services.AddHostedService<WebhookRegistrar>();
+}
+else
+{
+    builder.Services.AddHostedService<PollingWorker>(); // deletes any webhook, then polls
+}
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
@@ -71,5 +95,8 @@ if (app.Environment.IsDevelopment())
 }
 
 app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
+
+if (telegramMode == TelegramMode.Webhook)
+    app.MapTelegramWebhook();
 
 app.Run();

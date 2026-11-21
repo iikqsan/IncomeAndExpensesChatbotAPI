@@ -6,15 +6,17 @@ using Telegram.Bot.Types.Enums;
 
 namespace ExpenseBot.Api.Telegram;
 
-/// <summary>Long polling loop. Only runs when <c>Telegram:Mode = Polling</c>.</summary>
+/// <summary>
+/// Long polling loop. Only runs when <c>Telegram:Mode = Polling</c>; it first deletes any registered
+/// webhook, because getUpdates does not work while one is set.
+/// </summary>
 public sealed class PollingWorker(
     ITelegramBotClient bot,
     IServiceScopeFactory scopes,
     IOptions<TelegramOptions> options,
     ILogger<PollingWorker> logger) : BackgroundService
 {
-    private static readonly UpdateType[] AllowedUpdates =
-        [UpdateType.Message, UpdateType.EditedMessage, UpdateType.CallbackQuery, UpdateType.MyChatMember];
+    private static readonly UpdateType[] AllowedUpdates = TelegramUpdateTypes.Allowed;
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {

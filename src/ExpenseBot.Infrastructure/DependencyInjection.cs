@@ -13,7 +13,14 @@ public static class DependencyInjection
     public static IServiceCollection AddInfrastructure(this IServiceCollection services, IConfiguration config)
     {
         services.Configure<MongoOptions>(config.GetSection(MongoOptions.SectionName));
-        services.Configure<TelegramOptions>(config.GetSection(TelegramOptions.SectionName));
+        services.AddOptions<TelegramOptions>()
+            .Bind(config.GetSection(TelegramOptions.SectionName))
+            .Validate(o => !string.IsNullOrWhiteSpace(o.BotToken), "Telegram:BotToken is required.")
+            .Validate(o => o.Mode != TelegramMode.Webhook || IsHttpsUrl(o.WebhookUrl),
+                "Telegram:WebhookUrl must be an absolute https:// URL when Telegram:Mode = Webhook.")
+            .Validate(o => o.Mode != TelegramMode.Webhook || IsValidSecret(o.WebhookSecret),
+                "Telegram:WebhookSecret is required in Webhook mode: 1-256 characters of A-Z, a-z, 0-9, _ or -.")
+            .ValidateOnStart();
 
         services.AddSingleton<MongoContext>();
         services.AddSingleton<IUserRepository, MongoUserRepository>();
@@ -37,4 +44,11 @@ public static class DependencyInjection
 
         return services;
     }
+
+    private static bool IsHttpsUrl(string? url) =>
+        Uri.TryCreate(url, UriKind.Absolute, out var uri) && uri.Scheme == Uri.UriSchemeHttps;
+
+    // Telegram's rule for secret_token.
+    private static bool IsValidSecret(string? secret) =>
+        secret is { Length: >= 1 and <= 256 } && secret.All(c => char.IsAsciiLetterOrDigit(c) || c is '_' or '-');
 }

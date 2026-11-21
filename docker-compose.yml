@@ -1,12 +1,30 @@
+# Dev:   docker compose up -d mongo        (then `dotnet run` the API on your machine)
+# Full:  docker compose up -d --build      (API + MongoDB in containers, settings from .env)
 services:
   mongo:
     image: mongo:8.0
-    container_name: expensebot-mongo
+    container_name: iikqsan-money-bot-mongo
     restart: unless-stopped
     ports:
-      - "27017:27017"
+      - "127.0.0.1:27017:27017"
     volumes:
       - mongo-data:/data/db
+
+  api:
+    build: .
+    container_name: iikqsan-money-bot-api
+    restart: unless-stopped
+    depends_on:
+      - mongo
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      # Overrides .env so the container talks to the compose MongoDB.
+      # Remove this line to use the Mongo__ConnectionString from .env (e.g. Atlas).
+      Mongo__ConnectionString: mongodb://mongo:27017
+    ports:
+      - "8080:8080"
 
 volumes:
   mongo-data:

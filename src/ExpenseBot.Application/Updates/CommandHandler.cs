@@ -56,8 +56,9 @@ public sealed partial class CommandHandler(
             "delete" => await DeleteAsync(user, args, ct),
             "users" when isAdmin => formatter.Users(await userService.ListAsync(ct)),
             "block" when isAdmin => await BlockAsync(args, ct),
+            "unblock" when isAdmin => await UnblockAsync(args, ct),
             "addkeyword" when isAdmin => await AddKeywordAsync(args, ct),
-            "users" or "block" or "addkeyword" => formatter.NotAdmin(),
+            "users" or "block" or "unblock" or "addkeyword" => formatter.NotAdmin(),
             _ => formatter.UnknownCommand(),
         };
         await Reply(reply);
@@ -112,6 +113,24 @@ public sealed partial class CommandHandler(
             DecisionOutcome.AlreadyDecided => formatter.UserAlreadyBlocked(result.User!),
             _ => formatter.UserNotFound(targetId),
         };
+    }
+
+    private async Task<string> UnblockAsync(string args, CancellationToken ct)
+    {
+        if (!long.TryParse(args, NumberStyles.None, CultureInfo.InvariantCulture, out var targetId))
+            return formatter.Usage("/unblock <id> (ดู id ได้จาก /users)");
+
+        var result = await userService.UnblockAsync(targetId, ct);
+        switch (result.Outcome)
+        {
+            case DecisionOutcome.Done:
+                await messenger.SendHtmlAsync(targetId, formatter.UnblockedNotice(), ct);
+                return formatter.UserUnblocked(result.User!);
+            case DecisionOutcome.AlreadyDecided:
+                return formatter.UserNotBlocked(result.User!);
+            default:
+                return formatter.UserNotFound(targetId);
+        }
     }
 
     private async Task<string> AddKeywordAsync(string args, CancellationToken ct)

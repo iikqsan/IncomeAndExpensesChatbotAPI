@@ -76,5 +76,19 @@ public sealed class UserService(IUserRepository users, IOptions<BotOptions> opti
         return new DecisionResult(DecisionOutcome.Done, target);
     }
 
+    /// <summary>Re-activates a blocked user. Pending users go through the approval buttons instead.</summary>
+    public async Task<DecisionResult> UnblockAsync(long targetUserId, CancellationToken ct)
+    {
+        var target = await users.GetAsync(targetUserId, ct);
+        if (target is null)
+            return new DecisionResult(DecisionOutcome.UserNotFound);
+        if (target.Status != UserStatus.Blocked)
+            return new DecisionResult(DecisionOutcome.AlreadyDecided, target);
+
+        target.Status = UserStatus.Active;
+        await users.SetStatusAsync(targetUserId, UserStatus.Active, ct);
+        return new DecisionResult(DecisionOutcome.Done, target);
+    }
+
     public Task<IReadOnlyList<BotUser>> ListAsync(CancellationToken ct) => users.ListAllAsync(ct);
 }

@@ -2,7 +2,6 @@
 bin/
 obj/
 docs/
-tests/
 [Bb]in/
 [Oo]bj/
 [Dd]ebug/
@@ -58,6 +57,8 @@ appsettings.*.local.json
 .env
 .env.*
 !.env.example
+backups/
+*.gz
 appsettings.Development.json
 appsettings.Production.json
 appsettings.Local.json

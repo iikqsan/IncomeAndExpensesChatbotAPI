@@ -1,0 +1,41 @@
+# Production: API only. MongoDB is Atlas (connection string in .env), HTTPS comes from a reverse proxy
+# (e.g. Caddy on the host -> 127.0.0.1:8080).
+#
+#   docker compose -f docker-compose.prod.yml up -d --build
+#   docker compose -f docker-compose.prod.yml logs -f api
+#
+# Rollback: before building a new version, `docker tag iikqsan-money-bot-api:latest iikqsan-money-bot-api:prev`;
+# to go back, `docker tag iikqsan-money-bot-api:prev iikqsan-money-bot-api:latest` and `up -d` (without --build).
+name: iikqsan-money-bot
+
+services:
+  api:
+    build: .
+    image: iikqsan-money-bot-api:latest
+    container_name: iikqsan-money-bot-api
+    restart: unless-stopped
+    env_file:
+      - path: .env
+        required: true # BotToken, WebhookUrl, WebhookSecret, Mongo connection string, AdminUserId
+    environment:
+      # Production always uses the webhook, whatever .env says.
+      Telegram__Mode: Webhook
+    ports:
+      # Reachable only from the host (reverse proxy). Do not open 8080 to the internet.
+      - "127.0.0.1:8080:8080"
+    healthcheck:
+      # The runtime image has no curl/wget; use bash's /dev/tcp to call GET /health.
+      test:
+        - CMD
+        - bash
+        - -c
+        - "exec 3<>/dev/tcp/127.0.0.1/8080 && printf 'GET /health HTTP/1.0\\r\\nHost: localhost\\r\\n\\r\\n' >&3 && grep -q ' 200 ' <&3"
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
