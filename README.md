@@ -1,15 +1,4 @@
-# ExpenseBot: จดรายรับรายจ่ายผ่าน Telegram
-
-Telegram bot สำหรับสมาชิกในบ้าน พิมพ์ในแชทส่วนตัว เช่น `ซื้อข้าวกลางวัน 60` แล้วบอทจะบันทึกลง MongoDB และตอบยืนยัน
-`🔴 #42 | อาหาร | -60 บาท, ซื้อข้าวกลางวัน` ดูสเปกเต็มได้ที่ `docs/design.md`
-
-- .NET 10 / ASP.NET Core, `Telegram.Bot` 22.x, `MongoDB.Driver` 3.x
-- `src/ExpenseBot.Api`: Program, webhook endpoint, polling worker
-- `src/ExpenseBot.Application`: UpdateHandler, services, parser, classifier, formatter (ไม่ขึ้นกับ Telegram หรือ Mongo)
-- `src/ExpenseBot.Infrastructure`: Mongo repositories, index และ seed หมวด, Telegram client
-- `tests/ExpenseBot.Application.Tests`: xUnit
-
----
+# iikQsan Money Bot: จดรายรับ-รายจ่ายผ่าน Telegram
 
 ## 1. สร้าง bot กับ BotFather
 
@@ -153,11 +142,3 @@ docker run --rm -v "$(pwd)/backups:/backups" mongo:8.0 \
   mongorestore --uri="$MONGO_URI" --gzip --archive=/backups/expensebot-20261121-030000.gz --nsInclude='expensebot.*'
 ```
 ถ้าใช้ MongoDB จาก compose ให้ใช้ `MONGO_URI=mongodb://localhost:27017` (compose เปิดพอร์ตไว้เฉพาะ `127.0.0.1`)
-
-## 7. Deploy (สรุป)
-
-1. สร้าง cluster Atlas M0 สร้าง database user และอนุญาต IP ของ server
-2. บน VPS: `docker compose -f docker-compose.prod.yml up -d --build` (API อย่างเดียว ต่อ Atlas จาก `.env` บังคับโหมด Webhook เปิดพอร์ตเฉพาะ `127.0.0.1:8080` ให้ reverse proxy มี healthcheck และจำกัดขนาด log) หรือ build image เอง `docker build -t expensebot .` หรือให้ platform build จาก `Dockerfile` (multi-stage, รันเป็น non-root, มี tzdata สำหรับ `Asia/Bangkok`)
-3. ตั้ง environment variables ตามหัวข้อ 2 ด้วยโหมด `Webhook`
-4. ชี้ HTTPS ของ domain/platform มาที่พอร์ต 8080 ของ container
-5. ตั้ง backup ตามหัวข้อ 6
