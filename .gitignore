@@ -1,6 +1,8 @@
 # Build output
 bin/
 obj/
+docs/
+tests/
 [Bb]in/
 [Oo]bj/
 [Dd]ebug/
@@ -50,12 +52,15 @@ coverage*.xml
 logs/
 
 # App settings (local/dev)
-appsettings.Development.json
 appsettings.*.local.json
 
 # Secrets / environment
 .env
 .env.*
+!.env.example
+appsettings.Development.json
+appsettings.Production.json
+appsettings.Local.json
 *.pfx
 *.key
 secrets.json
