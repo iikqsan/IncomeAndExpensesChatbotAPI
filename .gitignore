@@ -1,3 +1,80 @@
-/appsettings.Development.json
-/bin
-/obj
+# Build output
+bin/
+obj/
+[Bb]in/
+[Oo]bj/
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+[Aa]rm/
+[Aa]rm64/
+
+# Publish output
+publish/
+*.Publish.xml
+*.pubxml.user
+PublishScripts/
+
+# Visual Studio
+.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+*.userprefs
+
+# VS Code
+.vscode/
+
+# NuGet
+*.nupkg
+*.snupkg
+**/packages/*
+!**/packages/build/
+project.lock.json
+project.fragment.lock.json
+artifacts/
+
+# Test results / coverage
+[Tt]est[Rr]esult*/
+TestResults/
+coverage/
+*.coverage
+*.coveragexml
+coverage*.json
+coverage*.xml
+
+# Logs
+*.log
+logs/
+
+# App settings (local/dev)
+appsettings.Development.json
+appsettings.*.local.json
+
+# Secrets / environment
+.env
+.env.*
+*.pfx
+*.key
+secrets.json
+
+# Claude
+.claude/
+CLAUDE.md
+CLAUDE.local.md
+**/CLAUDE.md
+**/CLAUDE.local.md
+.mcp.json
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Misc
+*.tmp
+*.bak
+*.swp
+*~
