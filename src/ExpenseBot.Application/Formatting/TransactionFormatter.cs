@@ -45,7 +45,7 @@ public sealed class TransactionFormatter(ICategoryProvider categories)
 
     public string Deleted(Transaction tx) => $"ลบแล้ว\n{Format(tx)}";
 
-    public string Edited(Transaction tx) => $"แก้แล้ว\n{Format(tx)}";
+    public string Edited(Transaction tx) => $"แก้ไขแล้ว\n{Format(tx)}";
 
     public string EditParseFailed(Transaction tx) =>
         $"แก้ไม่สำเร็จ: ไม่พบจำนวนเงินในข้อความใหม่ รายการเดิมยังอยู่\n{Format(tx)}";
@@ -65,7 +65,13 @@ public sealed class TransactionFormatter(ICategoryProvider categories)
 
     public string NothingToUndo() => "ยังไม่มีรายการให้ลบ";
 
-    public string SeqNotFound(long seq) => $"ไม่พบรายการ #{seq}";
+    public string ClearConfirm(string confirmWord) =>
+        $"คำสั่งนี้จะลบรายการทั้งหมดของคุณ และเริ่มนับ # ใหม่ที่ #1\nถ้าแน่ใจ พิมพ์ /clear {confirmWord}";
+
+    public string Cleared(long count) =>
+        count == 0
+            ? "ไม่มีรายการให้ลบ"
+            : $"ลบแล้ว {count:#,##0} รายการ รายการถัดไปจะเริ่มที่ #1";
 
     // ---------- Summary ----------
 
@@ -88,7 +94,7 @@ public sealed class TransactionFormatter(ICategoryProvider categories)
     {
         var text = Summary(report);
         return report.Period.Kind == PeriodKind.Month
-            ? $"{text}\n\n<i>ไม่พบรายการเงินเดือนในช่วงนี้ จึงสรุปตามเดือนปฏิทิน พิมพ์ เช่น รับเงินเดือน 20000 ในวันที่เงินเดือนเข้า เพื่อสรุปตามรอบเงินเดือน</i>"
+            ? $"{text}\n\n<i>ไม่พบรายการเงินเดือนในเดือนนี้ ระบบจะสรุปตามเดือนปฏิทิน กรุณาเพิ่มเงินเดือนเข้ามาในวันที่เงินเดือนเข้า เพื่อสรุปตามรอบเงินเดือน</i>"
             : text;
     }
 
@@ -119,9 +125,9 @@ public sealed class TransactionFormatter(ICategoryProvider categories)
 
     public static string PeriodTitle(SummaryPeriod p) => p.Kind switch
     {
-        PeriodKind.Day => $"สรุปวันนี้ ({ThaiDate(p.FirstDay)})",
-        PeriodKind.Week => $"สรุปสัปดาห์นี้ ({ThaiDateRange(p.FirstDay, p.LastDay)})",
-        PeriodKind.PayCycle => $"สรุปรอบเงินเดือน ({ThaiDateRange(p.FirstDay, p.LastDay)})",
+        PeriodKind.Day => $"สรุปยอดวันนี้ ({ThaiDate(p.FirstDay)})",
+        PeriodKind.Week => $"สรุปยอดสัปดาห์นี้ ({ThaiDateRange(p.FirstDay, p.LastDay)})",
+        PeriodKind.PayCycle => $"สรุปยอดเดือนนี้ ({ThaiDateRange(p.FirstDay, p.LastDay)})",
         _ => $"สรุปเดือน{ThaiMonthsFull[p.FirstDay.Month - 1]} {p.FirstDay.Year}",
     };
 
@@ -146,19 +152,18 @@ public sealed class TransactionFormatter(ICategoryProvider categories)
         sb.Append("• ซื้อข้าวกลางวัน 60\n");
         sb.Append("• ค่าเช่า 1,200\n");
         sb.Append("• กาแฟ 45.50\n");
-        sb.Append("• +เงินเดือน 25000\n");
-        sb.Append("ถือเป็นรายจ่าย ยกเว้นขึ้นต้นด้วย + หรือมีคำว่า รับ, เงินเดือน, ได้เงิน, โบนัส\n");
+        sb.Append("• เงินเดือน 25000\n");
         sb.Append("แก้ข้อความที่ส่งไปแล้วใน Telegram เพื่อแก้รายการนั้นได้\n\n");
 
         sb.Append("<b>คำสั่ง</b>\n");
-        sb.Append("/today สรุปวันนี้\n");
-        sb.Append("/week สรุปสัปดาห์นี้ (เริ่มวันจันทร์)\n");
-        sb.Append("/month สรุปรอบเงินเดือนปัจจุบัน (นับจากวันที่บันทึกเงินเดือน ถึงก่อนเงินเดือนรอบถัดไป)\n");
+        sb.Append("/today สรุปยอดวันนี้\n");
+        sb.Append("/week สรุปยอดสัปดาห์นี้ (เริ่มวันจันทร์)\n");
+        sb.Append("/month สรุปยอดตามรอบเงินเดือนปัจจุบัน (นับจากวันที่บันทึกเงินเดือน ถึงก่อนเงินเดือนรอบถัดไป)\n");
         sb.Append("/month 2026-10 สรุปรอบที่เงินเดือนเข้าในเดือนนั้น\n");
         sb.Append("ถ้ายังไม่เคยบันทึกเงินเดือน จะสรุปตามเดือนปฏิทินแทน\n");
         sb.Append("/list 10 รายการล่าสุด\n");
-        sb.Append("/undo ลบรายการล่าสุด\n");
-        sb.Append("/delete &lt;#&gt; ลบรายการที่ระบุ เช่น /delete 42\n");
+        sb.Append("/undo ลบรายการล่าสุด (ใช้เมื่อกรอกผิด)\n");
+        sb.Append("/clear ลบรายการทั้งหมด แล้วเริ่มนับ #1 ใหม่\n");
         sb.Append("/help วิธีใช้\n");
 
         if (isAdmin)
@@ -171,8 +176,8 @@ public sealed class TransactionFormatter(ICategoryProvider categories)
         }
 
         sb.Append("\n<b>หมวด</b>\n");
-        sb.Append($"รายจ่าย: {CategoryNames(CategoryType.Expense)}\n");
         sb.Append($"รายรับ: {CategoryNames(CategoryType.Income)}");
+        sb.Append($"รายจ่าย: {CategoryNames(CategoryType.Expense)}\n");
         return sb.ToString();
     }
 
@@ -185,7 +190,7 @@ public sealed class TransactionFormatter(ICategoryProvider categories)
     // ---------- Access / users ----------
 
     public string Welcome(BotUser user) =>
-        $"สวัสดี {Escape(user.DisplayName)} พิมพ์รายการได้เลย เช่น ข้าวกลางวัน 60 หรือพิมพ์ /help เพื่อดูวิธีใช้";
+        $"สวัสดี {Escape(user.DisplayName)} พิมพ์รายการได้เลย เช่น ซื้อข้าวกลางวัน 60 หรือพิมพ์ /help เพื่อดูวิธีใช้";
 
     public string AccessRequested() => "ส่งคำขอแล้ว รอผู้ดูแลอนุมัติ";
 

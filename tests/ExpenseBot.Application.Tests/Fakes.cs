@@ -35,6 +35,14 @@ internal sealed class FakeUsers : IUserRepository
 
     public Task<long> NextSeqAsync(long userId, CancellationToken ct) => Task.FromResult(++Store[userId].NextSeq);
 
+    public Task<bool> RewindSeqAsync(long userId, long expected, long value, CancellationToken ct)
+    {
+        if (!Store.TryGetValue(userId, out var u) || u.NextSeq != expected || u.NextSeq == value)
+            return Task.FromResult(false);
+        u.NextSeq = value;
+        return Task.FromResult(true);
+    }
+
     public Task<bool> SetStatusAsync(long userId, UserStatus status, CancellationToken ct)
     {
         if (!Store.TryGetValue(userId, out var u)) return Task.FromResult(false);
@@ -67,19 +75,20 @@ internal sealed class FakeTransactions : ITransactionRepository
 
     private IEnumerable<Transaction> Active(long userId) => Items.Where(t => t.UserId == userId && !t.IsDeleted);
 
-    public Task<bool> TryInsertAsync(long userId, Transaction t, CancellationToken ct)
+    /// <summary>Mirrors the Mongo indexes: unique messageId over all rows, unique seq over non-deleted rows.</summary>
+    public Task<InsertOutcome> TryInsertAsync(long userId, Transaction t, CancellationToken ct)
     {
-        if (Items.Any(x => x.UserId == userId && (x.MessageId == t.MessageId || x.Seq == t.Seq))) return Task.FromResult(false);
+        if (Items.Any(x => x.UserId == userId && x.MessageId == t.MessageId))
+            return Task.FromResult(InsertOutcome.DuplicateMessage);
+        if (Active(userId).Any(x => x.Seq == t.Seq))
+            return Task.FromResult(InsertOutcome.DuplicateSeq);
         t.Id = Guid.NewGuid().ToString("N");
         Items.Add(Copy(t));
-        return Task.FromResult(true);
+        return Task.FromResult(InsertOutcome.Inserted);
     }
 
     public Task<Transaction?> GetByMessageIdAsync(long userId, long messageId, CancellationToken ct) =>
         Task.FromResult(Active(userId).Where(t => t.MessageId == messageId).Select(Copy).FirstOrDefault());
-
-    public Task<Transaction?> GetBySeqAsync(long userId, long seq, CancellationToken ct) =>
-        Task.FromResult(Active(userId).Where(t => t.Seq == seq).Select(Copy).FirstOrDefault());
 
     public Task<IReadOnlyList<Transaction>> GetLatestAsync(long userId, int limit, CancellationToken ct) =>
         Task.FromResult<IReadOnlyList<Transaction>>(Active(userId).OrderByDescending(t => t.Seq).Take(limit).Select(Copy).ToList());
@@ -100,6 +109,14 @@ internal sealed class FakeTransactions : ITransactionRepository
         stored.IsDeleted = true;
         stored.UpdatedAt = nowUtc;
         return Task.FromResult(true);
+    }
+
+    public Task<long> SoftDeleteAllAsync(long userId, DateTime nowUtc, CancellationToken ct)
+    {
+        var rows = Active(userId).ToList();
+        foreach (var t in rows)
+            (t.IsDeleted, t.UpdatedAt) = (true, nowUtc);
+        return Task.FromResult((long)rows.Count);
     }
 
     public Task<IReadOnlyList<Transaction>> GetByCategoryAsync(long userId, string categoryId, DateTime fromUtc, DateTime toUtc, CancellationToken ct) =>

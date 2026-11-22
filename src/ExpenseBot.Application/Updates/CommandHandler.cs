@@ -53,7 +53,7 @@ public sealed partial class CommandHandler(
             "month" => await MonthAsync(user, args, ct),
             "list" => formatter.List(await transactionService.ListRecentAsync(user.Id, ct)),
             "undo" => await UndoAsync(user, ct),
-            "delete" => await DeleteAsync(user, args, ct),
+            "clear" => await ClearAsync(user, args, ct),
             "users" when isAdmin => formatter.Users(await userService.ListAsync(ct)),
             "block" when isAdmin => await BlockAsync(args, ct),
             "unblock" when isAdmin => await UnblockAsync(args, ct),
@@ -89,13 +89,15 @@ public sealed partial class CommandHandler(
         return deleted is null ? formatter.NothingToUndo() : formatter.Deleted(deleted);
     }
 
-    private async Task<string> DeleteAsync(BotUser user, string args, CancellationToken ct)
-    {
-        if (!long.TryParse(args.TrimStart('#'), NumberStyles.None, CultureInfo.InvariantCulture, out var seq) || seq <= 0)
-            return formatter.Usage("/delete <#> เช่น /delete 42");
+    /// <summary>The word that must follow /clear, so all data is never wiped by a single tap.</summary>
+    public const string ClearConfirmWord = "ยืนยัน";
 
-        var deleted = await transactionService.DeleteBySeqAsync(user.Id, seq, ct);
-        return deleted is null ? formatter.SeqNotFound(seq) : formatter.Deleted(deleted);
+    private async Task<string> ClearAsync(BotUser user, string args, CancellationToken ct)
+    {
+        if (args != ClearConfirmWord)
+            return formatter.ClearConfirm(ClearConfirmWord);
+
+        return formatter.Cleared(await transactionService.ClearAsync(user.Id, ct));
     }
 
     private async Task<string> BlockAsync(string args, CancellationToken ct)

@@ -18,6 +18,12 @@ public interface IUserRepository
     /// <summary>Atomically increments <c>nextSeq</c> (<c>$inc</c>) and returns the new value.</summary>
     Task<long> NextSeqAsync(long userId, CancellationToken ct);
 
+    /// <summary>
+    /// Sets <c>nextSeq</c> to <paramref name="value"/> only if it still equals <paramref name="expected"/>,
+    /// so a number handed out concurrently is never given back. Returns true if it was changed.
+    /// </summary>
+    Task<bool> RewindSeqAsync(long userId, long expected, long value, CancellationToken ct);
+
     /// <summary>Sets the status. Returns false if the user does not exist.</summary>
     Task<bool> SetStatusAsync(long userId, UserStatus status, CancellationToken ct);
 
@@ -29,16 +35,20 @@ public interface IUserRepository
 
 public sealed record CategoryTotal(TransactionType Type, string CategoryId, decimal Total, int Count);
 
+public enum InsertOutcome
+{
+    Inserted,
+    /// <summary>A transaction (deleted or not) already exists for the same <c>{userId, messageId}</c>.</summary>
+    DuplicateMessage,
+    /// <summary>A non-deleted transaction already has the same <c>{userId, seq}</c>.</summary>
+    DuplicateSeq,
+}
+
 public interface ITransactionRepository
 {
-    /// <summary>
-    /// Inserts the transaction. Returns false if one with the same <c>{userId, messageId}</c> already exists.
-    /// </summary>
-    Task<bool> TryInsertAsync(long userId, Transaction transaction, CancellationToken ct);
+    Task<InsertOutcome> TryInsertAsync(long userId, Transaction transaction, CancellationToken ct);
 
     Task<Transaction?> GetByMessageIdAsync(long userId, long messageId, CancellationToken ct);
-
-    Task<Transaction?> GetBySeqAsync(long userId, long seq, CancellationToken ct);
 
     /// <summary>Latest transactions, newest first (by seq).</summary>
     Task<IReadOnlyList<Transaction>> GetLatestAsync(long userId, int limit, CancellationToken ct);
@@ -48,6 +58,9 @@ public interface ITransactionRepository
 
     /// <summary>Sets <c>isDeleted = true</c>. Returns false if not found or already deleted.</summary>
     Task<bool> SoftDeleteAsync(long userId, string transactionId, DateTime nowUtc, CancellationToken ct);
+
+    /// <summary>Soft-deletes every non-deleted transaction of the user. Returns how many were deleted.</summary>
+    Task<long> SoftDeleteAllAsync(long userId, DateTime nowUtc, CancellationToken ct);
 
     /// <summary>Non-deleted transactions of one category in <c>[fromUtc, toUtc)</c>, oldest first.</summary>
     Task<IReadOnlyList<Transaction>> GetByCategoryAsync(long userId, string categoryId, DateTime fromUtc, DateTime toUtc, CancellationToken ct);

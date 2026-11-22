@@ -206,29 +206,124 @@ public class UpdateHandlerTests
     }
 
     [Fact]
-    public async Task Delete_by_seq_only_touches_own_transactions()
+    public async Task Undo_frees_the_number_for_the_next_entry()
+    {
+        await _app.Send(Admin, "ข้าว 60");    // #1
+        await _app.Send(Admin, "กาแฟ 45");    // #2
+        await _app.Send(Admin, "ค่ารถ 30");   // #3 (typo)
+        await _app.Send(Admin, "/undo");
+        await _app.Send(Admin, "ค่ารถ 40");
+
+        Assert.Equal("🔴\n#3 รายการจ่าย\nค่ารถ : 40 บาท", _app.LastTo(Admin));
+        Assert.Equal([1, 2, 3], ActiveSeqs(Admin));
+
+        await _app.Send(Admin, "/undo");      // removes #3
+        await _app.Send(Admin, "/undo");      // removes #2
+        await _app.Send(Admin, "ชา 25");
+        Assert.Equal("🔴\n#2 รายการจ่าย\nชา : 25 บาท", _app.LastTo(Admin));
+        Assert.Equal([1, 2], ActiveSeqs(Admin));
+    }
+
+    [Fact]
+    public async Task Undo_only_touches_own_numbering()
     {
         await _app.AddActiveMember(Mom);
         await _app.Send(Admin, "ข้าว 60");   // admin #1
         await _app.Send(Mom, "ค่าไฟ 900");   // mom #1
 
-        await _app.Send(Mom, "/delete 1");
+        await _app.Send(Mom, "/undo");
         Assert.Equal("ลบแล้ว\n🔴\n#1 รายการจ่าย\nค่าไฟ : 900 บาท", _app.LastTo(Mom));
         Assert.False(_app.Transactions.Items.Single(t => t.UserId == Admin).IsDeleted);
 
-        await _app.Send(Mom, "/delete 1");
-        Assert.Equal("ไม่พบรายการ #1", _app.LastTo(Mom));
-
-        await _app.Send(Mom, "/delete abc");
-        Assert.StartsWith("วิธีใช้:", _app.LastTo(Mom));
+        await _app.Send(Admin, "กาแฟ 45");
+        Assert.Equal("🔴\n#2 รายการจ่าย\nกาแฟ : 45 บาท", _app.LastTo(Admin));
+        await _app.Send(Mom, "ค่าน้ำ 150");
+        Assert.Equal("🔴\n#1 รายการจ่าย\nค่าน้ำ : 150 บาท", _app.LastTo(Mom));
     }
+
+    [Fact]
+    public async Task Undo_closes_a_gap_left_by_older_deletes()
+    {
+        await _app.Send(Admin, "ข้าว 60");    // #1
+        await _app.Send(Admin, "กาแฟ 45");    // #2
+        _app.Users.Store[Admin].NextSeq = 9;   // numbers 3..9 were used and deleted by an older version
+
+        await _app.Send(Admin, "/undo");      // removes #2
+        await _app.Send(Admin, "ชา 25");
+
+        Assert.Equal("🔴\n#2 รายการจ่าย\nชา : 25 บาท", _app.LastTo(Admin));
+    }
+
+    [Fact]
+    public async Task Delete_command_is_gone()
+    {
+        await _app.Send(Admin, "ข้าว 60");
+        await _app.Send(Admin, "/delete 1");
+
+        Assert.False(_app.Transactions.Items.Single().IsDeleted);
+        Assert.DoesNotContain("/delete", _app.Formatter.Help(isAdmin: true));
+    }
+
+    [Fact]
+    public async Task Duplicate_message_does_not_use_up_a_number()
+    {
+        await _app.Send(Admin, "ข้าว 60", messageId: 10);
+        await _app.Send(Admin, "ข้าว 60", messageId: 10); // Telegram re-delivers the same message
+        await _app.Send(Admin, "กาแฟ 45", messageId: 11);
+
+        Assert.Equal("🔴\n#2 รายการจ่าย\nกาแฟ : 45 บาท", _app.LastTo(Admin));
+        Assert.Equal([1, 2], ActiveSeqs(Admin));
+    }
+
+    [Fact]
+    public async Task Editing_an_undone_message_does_not_use_up_a_number()
+    {
+        await _app.Send(Admin, "ข้าว 60", messageId: 10);
+        await _app.Send(Admin, "/undo");
+        await _app.Edit(Admin, 10, "ข้าว 70");
+        await _app.Send(Admin, "กาแฟ 45", messageId: 11);
+
+        Assert.Equal("🔴\n#1 รายการจ่าย\nกาแฟ : 45 บาท", _app.LastTo(Admin));
+    }
+
+    [Fact]
+    public async Task Clear_needs_confirmation_then_restarts_at_1()
+    {
+        await _app.AddActiveMember(Mom);
+        await _app.Send(Admin, "ข้าว 60");
+        await _app.Send(Admin, "กาแฟ 45");
+        await _app.Send(Mom, "ค่าไฟ 900");
+
+        await _app.Send(Admin, "/clear");
+        Assert.Contains("/clear ยืนยัน", _app.LastTo(Admin));
+        Assert.Equal([1, 2], ActiveSeqs(Admin));
+
+        await _app.Send(Admin, "/clear ยืนยัน");
+        Assert.Equal("ลบแล้ว 2 รายการ รายการถัดไปจะเริ่มที่ #1", _app.LastTo(Admin));
+        Assert.Empty(ActiveSeqs(Admin));
+        Assert.Equal(3, _app.Transactions.Items.Count); // soft delete keeps the documents
+        Assert.Equal([1], ActiveSeqs(Mom));             // other users are untouched
+
+        await _app.Send(Admin, "ชา 25");
+        Assert.Equal("🔴\n#1 รายการจ่าย\nชา : 25 บาท", _app.LastTo(Admin));
+
+        await _app.Send(Admin, "/clear ยืนยัน");
+        await _app.Send(Admin, "/clear ยืนยัน");
+        Assert.Equal("ไม่มีรายการให้ลบ รายการถัดไปจะเริ่มที่ #1", _app.LastTo(Admin));
+    }
+
+    private long[] ActiveSeqs(long userId) => _app.Transactions.Items
+        .Where(t => t.UserId == userId && !t.IsDeleted)
+        .Select(t => t.Seq)
+        .Order()
+        .ToArray();
 
     [Fact]
     public async Task List_shows_last_10_oldest_first_excluding_deleted()
     {
         for (var i = 1; i <= 12; i++)
             await _app.Send(Admin, $"ข้าว {i}");
-        await _app.Send(Admin, "/delete 12");
+        await _app.Send(Admin, "/undo");
         await _app.Send(Admin, "/list");
 
         var blocks = _app.LastTo(Admin).Split("\n\n");

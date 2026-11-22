@@ -32,6 +32,8 @@ public sealed class TransactionService(
 {
     public const int ListSize = 10;
 
+    private const int MaxSeqAttempts = 5;
+
     public async Task<RecordResult> RecordAsync(long userId, long messageId, string text, DateTime occurredAtUtc, CancellationToken ct)
     {
         var parsed = MessageParser.Parse(text);
@@ -42,16 +44,29 @@ public sealed class TransactionService(
         var tx = new Transaction
         {
             UserId = userId,
-            Seq = await users.NextSeqAsync(userId, ct),
             MessageId = messageId,
             CreatedAt = now,
             OccurredAt = DateTime.SpecifyKind(occurredAtUtc, DateTimeKind.Utc),
         };
         Apply(tx, parsed, now);
 
-        return await transactions.TryInsertAsync(userId, tx, ct)
-            ? new RecordResult(RecordOutcome.Recorded, tx)
-            : new RecordResult(RecordOutcome.Duplicate);
+        for (var attempt = 1; attempt <= MaxSeqAttempts; attempt++)
+        {
+            tx.Seq = await users.NextSeqAsync(userId, ct);
+            switch (await transactions.TryInsertAsync(userId, tx, ct))
+            {
+                case InsertOutcome.Inserted:
+                    return new RecordResult(RecordOutcome.Recorded, tx);
+                case InsertOutcome.DuplicateMessage:
+                    // Nothing was stored: hand the number back so the next entry gets it (no gap).
+                    await users.RewindSeqAsync(userId, expected: tx.Seq, value: tx.Seq - 1, ct);
+                    return new RecordResult(RecordOutcome.Duplicate);
+                case InsertOutcome.DuplicateSeq:
+                    // Only after an /undo or /clear raced with this message: take the next number.
+                    continue;
+            }
+        }
+        throw new InvalidOperationException($"Could not allocate a free # for user {userId}.");
     }
 
     /// <summary>
@@ -74,18 +89,40 @@ public sealed class TransactionService(
             : new EditResult(EditOutcome.NotFound);
     }
 
-    /// <summary>Soft-deletes the user's most recent transaction.</summary>
+    /// <summary>
+    /// Soft-deletes the user's most recent transaction and frees its #, so the next entry gets the same number.
+    /// Only the latest entry can be removed, so no other transaction is ever renumbered.
+    /// </summary>
     public async Task<Transaction?> UndoAsync(long userId, CancellationToken ct)
     {
-        var latest = await transactions.GetLatestAsync(userId, 1, ct);
-        return latest.Count == 0 ? null : await DeleteAsync(userId, latest[0], ct);
+        var current = await CurrentSeqAsync(userId, ct);
+        var latest = await transactions.GetLatestAsync(userId, 2, ct);
+        if (latest.Count == 0)
+            return null;
+
+        var deleted = await DeleteAsync(userId, latest[0], ct);
+        if (deleted is not null)
+        {
+            // Continue right after the newest remaining entry. The rewind is skipped if a new
+            // message took a number in the meantime.
+            var remaining = latest.Count > 1 ? latest[1].Seq : 0;
+            await users.RewindSeqAsync(userId, expected: current, value: remaining, ct);
+        }
+        return deleted;
     }
 
-    public async Task<Transaction?> DeleteBySeqAsync(long userId, long seq, CancellationToken ct)
+    /// <summary>Soft-deletes all of the user's transactions and restarts the numbering at #1.</summary>
+    public async Task<long> ClearAsync(long userId, CancellationToken ct)
     {
-        var tx = await transactions.GetBySeqAsync(userId, seq, ct);
-        return tx is null ? null : await DeleteAsync(userId, tx, ct);
+        var current = await CurrentSeqAsync(userId, ct);
+        var count = await transactions.SoftDeleteAllAsync(userId, Now, ct);
+        await users.RewindSeqAsync(userId, expected: current, value: 0, ct);
+        return count;
     }
+
+    private async Task<long> CurrentSeqAsync(long userId, CancellationToken ct) =>
+        (await users.GetAsync(userId, ct))?.NextSeq
+        ?? throw new InvalidOperationException($"User {userId} does not exist.");
 
     /// <summary>The latest <see cref="ListSize"/> transactions, oldest first (newest at the bottom of the chat).</summary>
     public async Task<IReadOnlyList<Transaction>> ListRecentAsync(long userId, CancellationToken ct)

@@ -42,6 +42,14 @@ internal sealed class MongoUserRepository(MongoContext ctx, TimeProvider clock) 
         return doc?.NextSeq ?? throw new InvalidOperationException($"User {userId} does not exist.");
     }
 
+    public async Task<bool> RewindSeqAsync(long userId, long expected, long value, CancellationToken ct)
+    {
+        var result = await ctx.Users.UpdateOneAsync(
+            ById(userId) & Builders<UserDocument>.Filter.Eq(u => u.NextSeq, expected),
+            Builders<UserDocument>.Update.Set(u => u.NextSeq, value), cancellationToken: ct);
+        return result.ModifiedCount == 1;
+    }
+
     public async Task<bool> SetStatusAsync(long userId, UserStatus status, CancellationToken ct)
     {
         var result = await ctx.Users.UpdateOneAsync(ById(userId),
@@ -77,7 +85,7 @@ internal sealed class MongoTransactionRepository(MongoContext ctx) : ITransactio
     private static FilterDefinition<TransactionDocument> Active(long userId) =>
         F.Eq(t => t.UserId, userId) & F.Eq(t => t.IsDeleted, false);
 
-    public async Task<bool> TryInsertAsync(long userId, Transaction transaction, CancellationToken ct)
+    public async Task<InsertOutcome> TryInsertAsync(long userId, Transaction transaction, CancellationToken ct)
     {
         if (transaction.UserId != userId)
             throw new ArgumentException("Transaction does not belong to the given user.", nameof(transaction));
@@ -87,23 +95,20 @@ internal sealed class MongoTransactionRepository(MongoContext ctx) : ITransactio
         {
             await ctx.Transactions.InsertOneAsync(doc, cancellationToken: ct);
             transaction.Id = doc.Id.ToString();
-            return true;
+            return InsertOutcome.Inserted;
         }
         catch (MongoWriteException ex) when (ex.WriteError.Category == ServerErrorCategory.DuplicateKey)
         {
-            return false;
+            // The server names the violated index in the message.
+            return ex.WriteError.Message.Contains(MongoIndexInitializer.SeqIndexName, StringComparison.Ordinal)
+                ? InsertOutcome.DuplicateSeq
+                : InsertOutcome.DuplicateMessage;
         }
     }
 
     public async Task<Transaction?> GetByMessageIdAsync(long userId, long messageId, CancellationToken ct)
     {
         var doc = await ctx.Transactions.Find(Active(userId) & F.Eq(t => t.MessageId, messageId)).FirstOrDefaultAsync(ct);
-        return doc?.ToDomain();
-    }
-
-    public async Task<Transaction?> GetBySeqAsync(long userId, long seq, CancellationToken ct)
-    {
-        var doc = await ctx.Transactions.Find(Active(userId) & F.Eq(t => t.Seq, seq)).FirstOrDefaultAsync(ct);
         return doc?.ToDomain();
     }
 
@@ -138,6 +143,15 @@ internal sealed class MongoTransactionRepository(MongoContext ctx) : ITransactio
             Builders<TransactionDocument>.Update.Set(d => d.IsDeleted, true).Set(d => d.UpdatedAt, nowUtc),
             cancellationToken: ct);
         return result.ModifiedCount == 1;
+    }
+
+    public async Task<long> SoftDeleteAllAsync(long userId, DateTime nowUtc, CancellationToken ct)
+    {
+        var result = await ctx.Transactions.UpdateManyAsync(
+            Active(userId),
+            Builders<TransactionDocument>.Update.Set(d => d.IsDeleted, true).Set(d => d.UpdatedAt, nowUtc),
+            cancellationToken: ct);
+        return result.ModifiedCount;
     }
 
     public async Task<IReadOnlyList<Transaction>> GetByCategoryAsync(
