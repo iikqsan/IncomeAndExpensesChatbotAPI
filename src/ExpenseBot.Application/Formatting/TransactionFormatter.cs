@@ -24,20 +24,28 @@ public sealed class TransactionFormatter(ICategoryProvider categories)
 
     // ---------- Transactions ----------
 
-    /// <summary><c>🔴 #42 | อาหาร | -60 บาท, ซื้อข้าวกลางวัน</c></summary>
+    /// <summary>
+    /// Three lines, no category (categories only show in summaries):
+    /// <code>
+    /// 🔴
+    /// #42 รายการจ่าย
+    /// ซื้อข้าวกลางวัน : 60 บาท
+    /// </code>
+    /// </summary>
     public string Format(Transaction tx)
     {
         var isIncome = tx.Type == TransactionType.Income;
         var dot = isIncome ? "🟢" : "🔴";
-        var sign = isIncome ? "+" : "-";
+        var label = isIncome ? "รายการรับ" : "รายการจ่าย";
+        var amount = $"{FormatAmount(tx.Amount)} บาท";
+        var detail = string.IsNullOrWhiteSpace(tx.Description) ? amount : $"{Escape(tx.Description)} : {amount}";
 
-        var line = $"{dot} #{tx.Seq} | {Escape(CategoryName(tx.CategoryId))} | {sign}{FormatAmount(tx.Amount)} บาท";
-        return string.IsNullOrWhiteSpace(tx.Description) ? line : $"{line}, {Escape(tx.Description)}";
+        return $"{dot}\n#{tx.Seq} {label}\n{detail}";
     }
 
-    public string Deleted(Transaction tx) => $"ลบแล้ว: {Format(tx)}";
+    public string Deleted(Transaction tx) => $"ลบแล้ว\n{Format(tx)}";
 
-    public string Edited(Transaction tx) => $"แก้แล้ว: {Format(tx)}";
+    public string Edited(Transaction tx) => $"แก้แล้ว\n{Format(tx)}";
 
     public string EditParseFailed(Transaction tx) =>
         $"แก้ไม่สำเร็จ: ไม่พบจำนวนเงินในข้อความใหม่ รายการเดิมยังอยู่\n{Format(tx)}";
@@ -51,7 +59,7 @@ public sealed class TransactionFormatter(ICategoryProvider categories)
 
         var sb = new StringBuilder($"<b>{items.Count} รายการล่าสุด</b>");
         foreach (var tx in items)
-            sb.Append('\n').Append(Format(tx));
+            sb.Append("\n\n").Append(Format(tx));
         return sb.ToString();
     }
 
@@ -68,6 +76,25 @@ public sealed class TransactionFormatter(ICategoryProvider categories)
         if (report.Lines.Count == 0)
             return sb.Append("\nยังไม่มีรายการ").ToString();
 
+        AppendTotals(sb, report);
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// Reply to /month. When no salary was found (calendar month fallback),
+    /// adds a hint on how to get a salary-to-salary summary.
+    /// </summary>
+    public string MonthSummary(SummaryReport report)
+    {
+        var text = Summary(report);
+        return report.Period.Kind == PeriodKind.Month
+            ? $"{text}\n\n<i>ไม่พบรายการเงินเดือนในช่วงนี้ จึงสรุปตามเดือนปฏิทิน พิมพ์ เช่น รับเงินเดือน 20000 ในวันที่เงินเดือนเข้า เพื่อสรุปตามรอบเงินเดือน</i>"
+            : text;
+    }
+
+    private void AppendTotals(StringBuilder sb, SummaryReport report)
+    {
+
         AppendSection(sb, report, TransactionType.Income, "รายรับ", "+");
         AppendSection(sb, report, TransactionType.Expense, "รายจ่าย", "-");
 
@@ -75,7 +102,6 @@ public sealed class TransactionFormatter(ICategoryProvider categories)
         var dot = balance >= 0 ? "🟢" : "🔴";
         var sign = balance > 0 ? "+" : balance < 0 ? "-" : "";
         sb.Append($"\n\n{dot} <b>คงเหลือ</b> {sign}{FormatAmount(balance)} บาท");
-        return sb.ToString();
     }
 
     private void AppendSection(StringBuilder sb, SummaryReport report, TransactionType type, string title, string sign)
@@ -95,6 +121,7 @@ public sealed class TransactionFormatter(ICategoryProvider categories)
     {
         PeriodKind.Day => $"สรุปวันนี้ ({ThaiDate(p.FirstDay)})",
         PeriodKind.Week => $"สรุปสัปดาห์นี้ ({ThaiDateRange(p.FirstDay, p.LastDay)})",
+        PeriodKind.PayCycle => $"สรุปรอบเงินเดือน ({ThaiDateRange(p.FirstDay, p.LastDay)})",
         _ => $"สรุปเดือน{ThaiMonthsFull[p.FirstDay.Month - 1]} {p.FirstDay.Year}",
     };
 
@@ -126,8 +153,9 @@ public sealed class TransactionFormatter(ICategoryProvider categories)
         sb.Append("<b>คำสั่ง</b>\n");
         sb.Append("/today สรุปวันนี้\n");
         sb.Append("/week สรุปสัปดาห์นี้ (เริ่มวันจันทร์)\n");
-        sb.Append("/month สรุปเดือนนี้\n");
-        sb.Append("/month 2026-10 สรุปเดือนย้อนหลัง\n");
+        sb.Append("/month สรุปรอบเงินเดือนปัจจุบัน (นับจากวันที่บันทึกเงินเดือน ถึงก่อนเงินเดือนรอบถัดไป)\n");
+        sb.Append("/month 2026-10 สรุปรอบที่เงินเดือนเข้าในเดือนนั้น\n");
+        sb.Append("ถ้ายังไม่เคยบันทึกเงินเดือน จะสรุปตามเดือนปฏิทินแทน\n");
         sb.Append("/list 10 รายการล่าสุด\n");
         sb.Append("/undo ลบรายการล่าสุด\n");
         sb.Append("/delete &lt;#&gt; ลบรายการที่ระบุ เช่น /delete 42\n");

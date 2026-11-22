@@ -140,6 +140,16 @@ internal sealed class MongoTransactionRepository(MongoContext ctx) : ITransactio
         return result.ModifiedCount == 1;
     }
 
+    public async Task<IReadOnlyList<Transaction>> GetByCategoryAsync(
+        long userId, string categoryId, DateTime fromUtc, DateTime toUtc, CancellationToken ct)
+    {
+        var docs = await ctx.Transactions
+            .Find(Active(userId) & F.Gte(t => t.OccurredAt, fromUtc) & F.Lt(t => t.OccurredAt, toUtc) & F.Eq(t => t.CategoryId, categoryId))
+            .SortBy(t => t.OccurredAt)
+            .ToListAsync(ct);
+        return docs.Select(d => d.ToDomain()).ToList();
+    }
+
     public async Task<IReadOnlyList<CategoryTotal>> SummarizeAsync(long userId, DateTime fromUtc, DateTime toUtc, CancellationToken ct)
     {
         // $match (own, not deleted, period) → $group by type + category → $sum

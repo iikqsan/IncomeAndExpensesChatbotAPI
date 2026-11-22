@@ -24,14 +24,14 @@ public class UpdateHandlerTests
         Assert.Equal(1, t.Seq);
         Assert.Equal("food", t.CategoryId);
         Assert.Equal(DateTimeKind.Utc, t.OccurredAt.Kind);
-        Assert.Equal("🔴 #1 | อาหาร | -60 บาท, ซื้อข้าวกลางวัน", _app.LastTo(Admin));
+        Assert.Equal("🔴\n#1 รายการจ่าย\nซื้อข้าวกลางวัน : 60 บาท", _app.LastTo(Admin));
     }
 
     [Fact]
     public async Task Income_is_classified()
     {
         await _app.Send(Admin, "+เงินเดือน 25000");
-        Assert.Equal("🟢 #1 | เงินเดือน | +25,000 บาท, เงินเดือน", _app.LastTo(Admin));
+        Assert.Equal("🟢\n#1 รายการรับ\nเงินเดือน : 25,000 บาท", _app.LastTo(Admin));
     }
 
     [Fact]
@@ -148,7 +148,7 @@ public class UpdateHandlerTests
         Assert.Contains("ผู้ดูแลอนุมัติแล้ว", _app.LastTo(Mom));
 
         await _app.Send(Mom, "ข้าว 60");
-        Assert.Equal("🔴 #1 | อาหาร | -60 บาท, ข้าว", _app.LastTo(Mom));
+        Assert.Equal("🔴\n#1 รายการจ่าย\nข้าว : 60 บาท", _app.LastTo(Mom));
     }
 
     [Fact]
@@ -196,7 +196,7 @@ public class UpdateHandlerTests
         await _app.Send(Admin, "กาแฟ 45");
         await _app.Send(Admin, "/undo");
 
-        Assert.Equal("ลบแล้ว: 🔴 #2 | อาหาร | -45 บาท, กาแฟ", _app.LastTo(Admin));
+        Assert.Equal("ลบแล้ว\n🔴\n#2 รายการจ่าย\nกาแฟ : 45 บาท", _app.LastTo(Admin));
         Assert.True(_app.Transactions.Items.Single(t => t.Seq == 2).IsDeleted);
         Assert.Equal(2, _app.Transactions.Items.Count); // soft delete keeps the document
 
@@ -213,7 +213,7 @@ public class UpdateHandlerTests
         await _app.Send(Mom, "ค่าไฟ 900");   // mom #1
 
         await _app.Send(Mom, "/delete 1");
-        Assert.Equal("ลบแล้ว: 🔴 #1 | บิล | -900 บาท, ค่าไฟ", _app.LastTo(Mom));
+        Assert.Equal("ลบแล้ว\n🔴\n#1 รายการจ่าย\nค่าไฟ : 900 บาท", _app.LastTo(Mom));
         Assert.False(_app.Transactions.Items.Single(t => t.UserId == Admin).IsDeleted);
 
         await _app.Send(Mom, "/delete 1");
@@ -231,11 +231,11 @@ public class UpdateHandlerTests
         await _app.Send(Admin, "/delete 12");
         await _app.Send(Admin, "/list");
 
-        var lines = _app.LastTo(Admin).Split('\n');
-        Assert.Equal("<b>10 รายการล่าสุด</b>", lines[0]);
-        Assert.Equal(11, lines.Length);
-        Assert.StartsWith("🔴 #2 |", lines[1]);
-        Assert.StartsWith("🔴 #11 |", lines[^1]);
+        var blocks = _app.LastTo(Admin).Split("\n\n");
+        Assert.Equal("<b>10 รายการล่าสุด</b>", blocks[0]);
+        Assert.Equal(11, blocks.Length);
+        Assert.Equal("🔴\n#2 รายการจ่าย\nข้าว : 2 บาท", blocks[1]);
+        Assert.Equal("🔴\n#11 รายการจ่าย\nข้าว : 11 บาท", blocks[^1]);
     }
 
     [Fact]
@@ -262,11 +262,86 @@ public class UpdateHandlerTests
         await _app.Send(Admin, "/month");
         Assert.StartsWith("<b>สรุปเดือนพฤศจิกายน 2026</b>", _app.LastTo(Admin));
 
+        Assert.Contains("ไม่พบรายการเงินเดือนในช่วงนี้ จึงสรุปตามเดือนปฏิทิน", _app.LastTo(Admin));
+
         await _app.Send(Admin, "/month 2026-10");
-        Assert.Equal("<b>สรุปเดือนตุลาคม 2026</b>\nยังไม่มีรายการ", _app.LastTo(Admin));
+        Assert.StartsWith("<b>สรุปเดือนตุลาคม 2026</b>\nยังไม่มีรายการ", _app.LastTo(Admin));
 
         await _app.Send(Admin, "/month 2026-13");
         Assert.StartsWith("วิธีใช้:", _app.LastTo(Admin));
+    }
+
+    // 12:00 Bangkok on the given day of 2026.
+    private static DateTime Noon(int month, int day) => new(2026, month, day, 5, 0, 0, DateTimeKind.Utc);
+
+    [Fact]
+    public async Task Month_summarizes_from_the_day_salary_was_recorded()
+    {
+        await _app.AddActiveMember(Mom);
+
+        await _app.Send(Admin, "ข้าว 100", dateUtc: Noon(10, 24));                 // previous cycle
+        await _app.Send(Admin, "รับเงินเดือน 20,000", dateUtc: Noon(10, 25));
+        await _app.Send(Admin, "ข้าว 60", dateUtc: Noon(10, 26));
+        await _app.Send(Admin, "ค่าไฟ 500", dateUtc: Noon(11, 20));
+
+        await _app.Send(Mom, "ข้าว 40", dateUtc: Noon(10, 30));                    // before Mom's salary
+        await _app.Send(Mom, "+เงินเดือน 30000", dateUtc: Noon(10, 31));
+
+        await _app.Send(Admin, "/month");
+        var admin = _app.LastTo(Admin);
+        Assert.StartsWith("<b>สรุปรอบเงินเดือน (25 ต.ค. – 21 พ.ย. 2026)</b>", admin);
+        Assert.Contains("<b>รายรับ</b> +20,000 บาท", admin);
+        Assert.Contains("<b>รายจ่าย</b> -560 บาท", admin);
+        Assert.DoesNotContain("เดือนปฏิทิน", admin);
+
+        await _app.Send(Mom, "/month");
+        var mom = _app.LastTo(Mom);
+        Assert.StartsWith("<b>สรุปรอบเงินเดือน (31 ต.ค. – 21 พ.ย. 2026)</b>", mom);
+        Assert.Contains("<b>รายจ่าย</b> 0 บาท", mom);
+    }
+
+    [Fact]
+    public async Task Month_with_argument_picks_the_cycle_started_in_that_month_and_ends_before_next_salary()
+    {
+        _app.Clock.Now = new DateTimeOffset(2026, 12, 3, 5, 0, 0, TimeSpan.Zero);
+
+        await _app.Send(Admin, "รับเงินเดือน 20000", dateUtc: Noon(10, 25));
+        await _app.Send(Admin, "ข้าว 60", dateUtc: Noon(11, 24));
+        await _app.Send(Admin, "รับเงินเดือน 20000", dateUtc: Noon(11, 25));
+        await _app.Send(Admin, "ข้าว 80", dateUtc: Noon(11, 26));
+
+        await _app.Send(Admin, "/month 2026-10");
+        var oct = _app.LastTo(Admin);
+        Assert.StartsWith("<b>สรุปรอบเงินเดือน (25 ต.ค. – 24 พ.ย. 2026)</b>", oct);
+        Assert.Contains("<b>รายจ่าย</b> -60 บาท", oct);
+
+        await _app.Send(Admin, "/month");
+        var current = _app.LastTo(Admin);
+        Assert.StartsWith("<b>สรุปรอบเงินเดือน (25 พ.ย. – 3 ธ.ค. 2026)</b>", current);
+        Assert.Contains("<b>รายจ่าย</b> -80 บาท", current);
+    }
+
+    [Fact]
+    public async Task Bonus_and_ot_do_not_start_a_new_cycle()
+    {
+        await _app.Send(Admin, "รับเงินเดือน 20000", dateUtc: Noon(10, 25));
+        await _app.Send(Admin, "โบนัส 5000", dateUtc: Noon(11, 15));
+        await _app.Send(Admin, "+โอที 1000", dateUtc: Noon(11, 18));
+
+        await _app.Send(Admin, "/month");
+        var text = _app.LastTo(Admin);
+        Assert.StartsWith("<b>สรุปรอบเงินเดือน (25 ต.ค. – 21 พ.ย. 2026)</b>", text);
+        Assert.Contains("<b>รายรับ</b> +26,000 บาท", text);
+    }
+
+    [Fact]
+    public async Task Deleted_salary_falls_back_to_calendar_month()
+    {
+        await _app.Send(Admin, "รับเงินเดือน 20000", dateUtc: Noon(10, 25));
+        await _app.Send(Admin, "/undo");
+
+        await _app.Send(Admin, "/month");
+        Assert.StartsWith("<b>สรุปเดือนพฤศจิกายน 2026</b>", _app.LastTo(Admin));
     }
 
     [Fact]
@@ -330,7 +405,7 @@ public class UpdateHandlerTests
         Assert.Equal("ผู้ดูแลคืนสิทธิ์ใช้งานแล้ว พิมพ์ /help เพื่อดูวิธีใช้", _app.LastTo(Mom));
 
         await _app.Send(Mom, "ข้าว 60");
-        Assert.StartsWith("🔴 #1 | อาหาร | -60 บาท", _app.LastTo(Mom));
+        Assert.StartsWith("🔴\n#1 รายการจ่าย\nข้าว : 60 บาท", _app.LastTo(Mom));
 
         await _app.Send(Admin, "/unblock 2002");
         Assert.Equal("คุณ2002 (@user2002) ไม่ได้ถูกระงับ", _app.LastTo(Admin));
@@ -373,14 +448,14 @@ public class UpdateHandlerTests
     public async Task Addkeyword_updates_db_and_clears_cache()
     {
         await _app.Send(Admin, "หวย 80");
-        Assert.Contains("| อื่นๆ |", _app.LastTo(Admin));
+        Assert.Equal(ExpenseBot.Application.Categories.DefaultCategories.ExpenseOther, _app.Transactions.Items[^1].CategoryId);
 
         await _app.Send(Admin, "/addkeyword บันเทิง หวย");
         Assert.Equal("เพิ่ม keyword \"หวย\" ให้หมวด บันเทิง แล้ว", _app.LastTo(Admin));
         Assert.Contains("หวย", _app.CategoryRepo.Items.Single(c => c.Id == "entertainment").Keywords);
 
         await _app.Send(Admin, "หวย 80");
-        Assert.Contains("| บันเทิง |", _app.LastTo(Admin));
+        Assert.Equal("entertainment", _app.Transactions.Items[^1].CategoryId);
 
         await _app.Send(Admin, "/addkeyword บันเทิง หวย");
         Assert.Contains("มี keyword", _app.LastTo(Admin));
@@ -404,7 +479,7 @@ public class UpdateHandlerTests
         Assert.Equal(600m, t.Amount);
         Assert.Equal(1, t.Seq);
         Assert.Equal("ซื้อข้าวกลางวัน 600", t.RawText);
-        Assert.Equal("แก้แล้ว: 🔴 #1 | อาหาร | -600 บาท, ซื้อข้าวกลางวัน", _app.LastTo(Admin));
+        Assert.Equal("แก้แล้ว\n🔴\n#1 รายการจ่าย\nซื้อข้าวกลางวัน : 600 บาท", _app.LastTo(Admin));
     }
 
     [Fact]
@@ -414,7 +489,7 @@ public class UpdateHandlerTests
         await _app.Edit(Admin, 10, "ข้าว");
 
         Assert.Equal(60m, _app.Transactions.Items.Single().Amount);
-        Assert.Equal("แก้ไม่สำเร็จ: ไม่พบจำนวนเงินในข้อความใหม่ รายการเดิมยังอยู่\n🔴 #1 | อาหาร | -60 บาท, ข้าว",
+        Assert.Equal("แก้ไม่สำเร็จ: ไม่พบจำนวนเงินในข้อความใหม่ รายการเดิมยังอยู่\n🔴\n#1 รายการจ่าย\nข้าว : 60 บาท",
             _app.LastTo(Admin));
     }
 
@@ -424,7 +499,7 @@ public class UpdateHandlerTests
         await _app.Send(Admin, "ข้าว", messageId: 10);
         await _app.Edit(Admin, 10, "ข้าว 60");
 
-        Assert.Equal("🔴 #1 | อาหาร | -60 บาท, ข้าว", _app.LastTo(Admin));
+        Assert.Equal("🔴\n#1 รายการจ่าย\nข้าว : 60 บาท", _app.LastTo(Admin));
     }
 
     [Fact]

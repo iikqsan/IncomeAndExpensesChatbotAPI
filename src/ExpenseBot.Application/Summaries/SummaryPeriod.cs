@@ -5,6 +5,7 @@ public enum PeriodKind
     Day,
     Week,
     Month,
+    PayCycle,
 }
 
 /// <summary>
@@ -39,14 +40,18 @@ public sealed record SummaryPeriod(PeriodKind Kind, DateOnly FirstDay, DateOnly 
         return Create(PeriodKind.Month, first, first.AddMonths(1), tz);
     }
 
+    /// <summary>Salary-to-salary period, see <see cref="PayCycles"/>.</summary>
+    public static SummaryPeriod ForPayCycle(PayCycle cycle, TimeZoneInfo tz) =>
+        Create(PeriodKind.PayCycle, cycle.FirstDay, cycle.LastDay.AddDays(1), tz);
+
     public bool Contains(DateTime utc) => utc >= FromUtc && utc < ToUtc;
 
-    private static DateOnly LocalDate(DateTime nowUtc, TimeZoneInfo tz) =>
-        DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(nowUtc, DateTimeKind.Utc), tz));
+    public static DateOnly LocalDate(DateTime utc, TimeZoneInfo tz) =>
+        DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(utc, DateTimeKind.Utc), tz));
+
+    public static DateTime MidnightToUtc(DateOnly localMidnight, TimeZoneInfo tz) =>
+        TimeZoneInfo.ConvertTimeToUtc(localMidnight.ToDateTime(TimeOnly.MinValue, DateTimeKind.Unspecified), tz);
 
     private static SummaryPeriod Create(PeriodKind kind, DateOnly first, DateOnly endExclusive, TimeZoneInfo tz) =>
         new(kind, first, endExclusive.AddDays(-1), MidnightToUtc(first, tz), MidnightToUtc(endExclusive, tz));
-
-    private static DateTime MidnightToUtc(DateOnly localMidnight, TimeZoneInfo tz) =>
-        TimeZoneInfo.ConvertTimeToUtc(localMidnight.ToDateTime(TimeOnly.MinValue, DateTimeKind.Unspecified), tz);
 }

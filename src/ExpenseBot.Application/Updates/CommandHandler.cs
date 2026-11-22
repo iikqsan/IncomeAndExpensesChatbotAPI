@@ -69,7 +69,7 @@ public sealed partial class CommandHandler(
     private async Task<string> MonthAsync(BotUser user, string args, CancellationToken ct)
     {
         if (args.Length == 0)
-            return formatter.Summary(await summaryService.ThisMonthAsync(user, ct));
+            return formatter.MonthSummary(await summaryService.ThisMonthAsync(user, ct));
 
         var m = MonthArg().Match(args);
         if (!m.Success)
@@ -80,7 +80,7 @@ public sealed partial class CommandHandler(
         if (month is < 1 or > 12 || year < 2000)
             return formatter.Usage("/month หรือ /month 2026-10");
 
-        return formatter.Summary(await summaryService.MonthAsync(user, year, month, ct));
+        return formatter.MonthSummary(await summaryService.MonthAsync(user, year, month, ct));
     }
 
     private async Task<string> UndoAsync(BotUser user, CancellationToken ct)

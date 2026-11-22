@@ -49,6 +49,9 @@ public interface ITransactionRepository
     /// <summary>Sets <c>isDeleted = true</c>. Returns false if not found or already deleted.</summary>
     Task<bool> SoftDeleteAsync(long userId, string transactionId, DateTime nowUtc, CancellationToken ct);
 
+    /// <summary>Non-deleted transactions of one category in <c>[fromUtc, toUtc)</c>, oldest first.</summary>
+    Task<IReadOnlyList<Transaction>> GetByCategoryAsync(long userId, string categoryId, DateTime fromUtc, DateTime toUtc, CancellationToken ct);
+
     /// <summary>Totals per type and category for <c>[fromUtc, toUtc)</c>.</summary>
     Task<IReadOnlyList<CategoryTotal>> SummarizeAsync(long userId, DateTime fromUtc, DateTime toUtc, CancellationToken ct);
 }

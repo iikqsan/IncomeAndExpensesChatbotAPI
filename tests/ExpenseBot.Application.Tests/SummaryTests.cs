@@ -82,6 +82,54 @@ public class SummaryTests
         Assert.Equal(940m, report.Balance);
     }
 
+    // ---------- Pay cycles ----------
+
+    private static DateOnly D(int month, int day, int year = 2026) => new(year, month, day);
+
+    [Fact]
+    public void Salary_entries_close_to_the_cycle_start_stay_in_the_same_cycle()
+    {
+        var starts = PayCycles.CycleStarts([D(11, 25), D(10, 25), D(10, 27), D(10, 25)]);
+        Assert.Equal([D(10, 25), D(11, 25)], starts);
+    }
+
+    [Fact]
+    public void Current_cycle_runs_from_salary_to_today()
+    {
+        var cycle = PayCycles.Current([D(10, 31)], today: D(11, 22));
+        Assert.Equal(new PayCycle(D(10, 31), D(11, 22), IsOngoing: true), cycle);
+    }
+
+    [Fact]
+    public void Current_cycle_is_null_without_a_recent_salary()
+    {
+        Assert.Null(PayCycles.Current([], D(11, 22)));
+        Assert.Null(PayCycles.Current([D(8, 1)], D(11, 22)));
+    }
+
+    [Fact]
+    public void Closed_cycle_ends_the_day_before_the_next_salary()
+    {
+        var cycle = PayCycles.ForMonth([D(10, 31), D(11, 30)], 2026, 10, today: D(12, 5));
+        Assert.Equal(new PayCycle(D(10, 31), D(11, 29), IsOngoing: false), cycle);
+    }
+
+    [Fact]
+    public void Old_cycle_without_a_next_salary_is_capped_at_one_month()
+    {
+        var cycle = PayCycles.ForMonth([D(6, 25)], 2026, 6, today: D(11, 22));
+        Assert.Equal(new PayCycle(D(6, 25), D(7, 24), IsOngoing: false), cycle);
+    }
+
+    [Fact]
+    public void Pay_cycle_period_is_cut_at_midnight_bangkok()
+    {
+        var p = SummaryPeriod.ForPayCycle(new PayCycle(D(10, 25), D(11, 24), false), Bangkok);
+        Assert.Equal(new DateTime(2026, 10, 24, 17, 0, 0, DateTimeKind.Utc), p.FromUtc);
+        Assert.Equal(new DateTime(2026, 11, 24, 17, 0, 0, DateTimeKind.Utc), p.ToUtc);
+        Assert.Equal(D(11, 24), p.LastDay);
+    }
+
     private static void Add(FakeTransactions repo, long userId, long seq, TransactionType type, decimal amount,
         string categoryId, DateTime occurredAt, bool deleted = false)
     {

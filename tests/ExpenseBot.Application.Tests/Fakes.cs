@@ -102,6 +102,13 @@ internal sealed class FakeTransactions : ITransactionRepository
         return Task.FromResult(true);
     }
 
+    public Task<IReadOnlyList<Transaction>> GetByCategoryAsync(long userId, string categoryId, DateTime fromUtc, DateTime toUtc, CancellationToken ct) =>
+        Task.FromResult<IReadOnlyList<Transaction>>(Active(userId)
+            .Where(t => t.CategoryId == categoryId && t.OccurredAt >= fromUtc && t.OccurredAt < toUtc)
+            .OrderBy(t => t.OccurredAt)
+            .Select(Copy)
+            .ToList());
+
     public Task<IReadOnlyList<CategoryTotal>> SummarizeAsync(long userId, DateTime fromUtc, DateTime toUtc, CancellationToken ct) =>
         Task.FromResult<IReadOnlyList<CategoryTotal>>(Active(userId)
             .Where(t => t.OccurredAt >= fromUtc && t.OccurredAt < toUtc)
