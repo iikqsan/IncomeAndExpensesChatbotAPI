@@ -24,14 +24,14 @@ public class UpdateHandlerTests
         Assert.Equal(1, t.Seq);
         Assert.Equal("food", t.CategoryId);
         Assert.Equal(DateTimeKind.Utc, t.OccurredAt.Kind);
-        Assert.Equal("🔴\n#1 รายการจ่าย\nซื้อข้าวกลางวัน : 60 บาท", _app.LastTo(Admin));
+        Assert.Equal("🔴 รายการจ่าย\nซื้อข้าวกลางวัน : 60 บาท", _app.LastTo(Admin));
     }
 
     [Fact]
     public async Task Income_is_classified()
     {
         await _app.Send(Admin, "+เงินเดือน 25000");
-        Assert.Equal("🟢\n#1 รายการรับ\nเงินเดือน : 25,000 บาท", _app.LastTo(Admin));
+        Assert.Equal("🟢 รายการรับ\nเงินเดือน : 25,000 บาท", _app.LastTo(Admin));
     }
 
     [Fact]
@@ -148,7 +148,7 @@ public class UpdateHandlerTests
         Assert.Contains("ผู้ดูแลอนุมัติแล้ว", _app.LastTo(Mom));
 
         await _app.Send(Mom, "ข้าว 60");
-        Assert.Equal("🔴\n#1 รายการจ่าย\nข้าว : 60 บาท", _app.LastTo(Mom));
+        Assert.Equal("🔴 รายการจ่าย\nข้าว : 60 บาท", _app.LastTo(Mom));
     }
 
     [Fact]
@@ -196,7 +196,7 @@ public class UpdateHandlerTests
         await _app.Send(Admin, "กาแฟ 45");
         await _app.Send(Admin, "/undo");
 
-        Assert.Equal("ลบแล้ว\n🔴\n#2 รายการจ่าย\nกาแฟ : 45 บาท", _app.LastTo(Admin));
+        Assert.Equal("ลบแล้ว\n🔴 รายการจ่าย\nกาแฟ : 45 บาท", _app.LastTo(Admin));
         Assert.True(_app.Transactions.Items.Single(t => t.Seq == 2).IsDeleted);
         Assert.Equal(2, _app.Transactions.Items.Count); // soft delete keeps the document
 
@@ -214,13 +214,13 @@ public class UpdateHandlerTests
         await _app.Send(Admin, "/undo");
         await _app.Send(Admin, "ค่ารถ 40");
 
-        Assert.Equal("🔴\n#3 รายการจ่าย\nค่ารถ : 40 บาท", _app.LastTo(Admin));
+        Assert.Equal("🔴 รายการจ่าย\nค่ารถ : 40 บาท", _app.LastTo(Admin));
         Assert.Equal([1, 2, 3], ActiveSeqs(Admin));
 
         await _app.Send(Admin, "/undo");      // removes #3
         await _app.Send(Admin, "/undo");      // removes #2
         await _app.Send(Admin, "ชา 25");
-        Assert.Equal("🔴\n#2 รายการจ่าย\nชา : 25 บาท", _app.LastTo(Admin));
+        Assert.Equal("🔴 รายการจ่าย\nชา : 25 บาท", _app.LastTo(Admin));
         Assert.Equal([1, 2], ActiveSeqs(Admin));
     }
 
@@ -232,13 +232,13 @@ public class UpdateHandlerTests
         await _app.Send(Mom, "ค่าไฟ 900");   // mom #1
 
         await _app.Send(Mom, "/undo");
-        Assert.Equal("ลบแล้ว\n🔴\n#1 รายการจ่าย\nค่าไฟ : 900 บาท", _app.LastTo(Mom));
+        Assert.Equal("ลบแล้ว\n🔴 รายการจ่าย\nค่าไฟ : 900 บาท", _app.LastTo(Mom));
         Assert.False(_app.Transactions.Items.Single(t => t.UserId == Admin).IsDeleted);
 
         await _app.Send(Admin, "กาแฟ 45");
-        Assert.Equal("🔴\n#2 รายการจ่าย\nกาแฟ : 45 บาท", _app.LastTo(Admin));
+        Assert.Equal("🔴 รายการจ่าย\nกาแฟ : 45 บาท", _app.LastTo(Admin));
         await _app.Send(Mom, "ค่าน้ำ 150");
-        Assert.Equal("🔴\n#1 รายการจ่าย\nค่าน้ำ : 150 บาท", _app.LastTo(Mom));
+        Assert.Equal("🔴 รายการจ่าย\nค่าน้ำ : 150 บาท", _app.LastTo(Mom));
     }
 
     [Fact]
@@ -251,7 +251,7 @@ public class UpdateHandlerTests
         await _app.Send(Admin, "/undo");      // removes #2
         await _app.Send(Admin, "ชา 25");
 
-        Assert.Equal("🔴\n#2 รายการจ่าย\nชา : 25 บาท", _app.LastTo(Admin));
+        Assert.Equal("🔴 รายการจ่าย\nชา : 25 บาท", _app.LastTo(Admin));
     }
 
     [Fact]
@@ -271,7 +271,7 @@ public class UpdateHandlerTests
         await _app.Send(Admin, "ข้าว 60", messageId: 10); // Telegram re-delivers the same message
         await _app.Send(Admin, "กาแฟ 45", messageId: 11);
 
-        Assert.Equal("🔴\n#2 รายการจ่าย\nกาแฟ : 45 บาท", _app.LastTo(Admin));
+        Assert.Equal("🔴 รายการจ่าย\nกาแฟ : 45 บาท", _app.LastTo(Admin));
         Assert.Equal([1, 2], ActiveSeqs(Admin));
     }
 
@@ -283,7 +283,7 @@ public class UpdateHandlerTests
         await _app.Edit(Admin, 10, "ข้าว 70");
         await _app.Send(Admin, "กาแฟ 45", messageId: 11);
 
-        Assert.Equal("🔴\n#1 รายการจ่าย\nกาแฟ : 45 บาท", _app.LastTo(Admin));
+        Assert.Equal("🔴 รายการจ่าย\nกาแฟ : 45 บาท", _app.LastTo(Admin));
     }
 
     [Fact]
@@ -299,17 +299,17 @@ public class UpdateHandlerTests
         Assert.Equal([1, 2], ActiveSeqs(Admin));
 
         await _app.Send(Admin, "/clear ยืนยัน");
-        Assert.Equal("ลบแล้ว 2 รายการ รายการถัดไปจะเริ่มที่ #1", _app.LastTo(Admin));
+        Assert.Equal("ลบแล้ว 2 รายการ", _app.LastTo(Admin));
         Assert.Empty(ActiveSeqs(Admin));
         Assert.Equal(3, _app.Transactions.Items.Count); // soft delete keeps the documents
         Assert.Equal([1], ActiveSeqs(Mom));             // other users are untouched
 
         await _app.Send(Admin, "ชา 25");
-        Assert.Equal("🔴\n#1 รายการจ่าย\nชา : 25 บาท", _app.LastTo(Admin));
+        Assert.Equal("🔴 รายการจ่าย\nชา : 25 บาท", _app.LastTo(Admin));
 
         await _app.Send(Admin, "/clear ยืนยัน");
         await _app.Send(Admin, "/clear ยืนยัน");
-        Assert.Equal("ไม่มีรายการให้ลบ รายการถัดไปจะเริ่มที่ #1", _app.LastTo(Admin));
+        Assert.Equal("ไม่มีรายการให้ลบ", _app.LastTo(Admin));
     }
 
     private long[] ActiveSeqs(long userId) => _app.Transactions.Items
@@ -329,8 +329,8 @@ public class UpdateHandlerTests
         var blocks = _app.LastTo(Admin).Split("\n\n");
         Assert.Equal("<b>10 รายการล่าสุด</b>", blocks[0]);
         Assert.Equal(11, blocks.Length);
-        Assert.Equal("🔴\n#2 รายการจ่าย\nข้าว : 2 บาท", blocks[1]);
-        Assert.Equal("🔴\n#11 รายการจ่าย\nข้าว : 11 บาท", blocks[^1]);
+        Assert.Equal("🔴 รายการจ่าย\nข้าว : 2 บาท", blocks[1]);
+        Assert.Equal("🔴 รายการจ่าย\nข้าว : 11 บาท", blocks[^1]);
     }
 
     [Fact]
@@ -352,12 +352,12 @@ public class UpdateHandlerTests
     {
         await _app.Send(Admin, "ข้าว 60");
         await _app.Send(Admin, "/week");
-        Assert.StartsWith("<b>สรุปสัปดาห์นี้ (16–22 พ.ย. 2026)</b>", _app.LastTo(Admin));
+        Assert.StartsWith("<b>สรุปยอดสัปดาห์นี้ (16–22 พ.ย. 2026)</b>", _app.LastTo(Admin));
 
         await _app.Send(Admin, "/month");
         Assert.StartsWith("<b>สรุปเดือนพฤศจิกายน 2026</b>", _app.LastTo(Admin));
 
-        Assert.Contains("ไม่พบรายการเงินเดือนในช่วงนี้ จึงสรุปตามเดือนปฏิทิน", _app.LastTo(Admin));
+        Assert.Contains("ไม่พบรายการเงินเดือนในเดือนนี้ ระบบจะสรุปตามเดือนปฏิทิน", _app.LastTo(Admin));
 
         await _app.Send(Admin, "/month 2026-10");
         Assert.StartsWith("<b>สรุปเดือนตุลาคม 2026</b>\nยังไม่มีรายการ", _app.LastTo(Admin));
@@ -384,14 +384,14 @@ public class UpdateHandlerTests
 
         await _app.Send(Admin, "/month");
         var admin = _app.LastTo(Admin);
-        Assert.StartsWith("<b>สรุปรอบเงินเดือน (25 ต.ค. – 21 พ.ย. 2026)</b>", admin);
-        Assert.Contains("<b>รายรับ</b> +20,000 บาท", admin);
+        Assert.StartsWith("<b>สรุปยอดเดือนนี้ (25 ต.ค. – 21 พ.ย. 2026)</b>", admin);
+        Assert.Contains("<b>รายรับ</b> 20,000 บาท", admin);
         Assert.Contains("<b>รายจ่าย</b> -560 บาท", admin);
         Assert.DoesNotContain("เดือนปฏิทิน", admin);
 
         await _app.Send(Mom, "/month");
         var mom = _app.LastTo(Mom);
-        Assert.StartsWith("<b>สรุปรอบเงินเดือน (31 ต.ค. – 21 พ.ย. 2026)</b>", mom);
+        Assert.StartsWith("<b>สรุปยอดเดือนนี้ (31 ต.ค. – 21 พ.ย. 2026)</b>", mom);
         Assert.Contains("<b>รายจ่าย</b> 0 บาท", mom);
     }
 
@@ -407,12 +407,12 @@ public class UpdateHandlerTests
 
         await _app.Send(Admin, "/month 2026-10");
         var oct = _app.LastTo(Admin);
-        Assert.StartsWith("<b>สรุปรอบเงินเดือน (25 ต.ค. – 24 พ.ย. 2026)</b>", oct);
+        Assert.StartsWith("<b>สรุปยอดเดือนนี้ (25 ต.ค. – 24 พ.ย. 2026)</b>", oct);
         Assert.Contains("<b>รายจ่าย</b> -60 บาท", oct);
 
         await _app.Send(Admin, "/month");
         var current = _app.LastTo(Admin);
-        Assert.StartsWith("<b>สรุปรอบเงินเดือน (25 พ.ย. – 3 ธ.ค. 2026)</b>", current);
+        Assert.StartsWith("<b>สรุปยอดเดือนนี้ (25 พ.ย. – 3 ธ.ค. 2026)</b>", current);
         Assert.Contains("<b>รายจ่าย</b> -80 บาท", current);
     }
 
@@ -425,8 +425,8 @@ public class UpdateHandlerTests
 
         await _app.Send(Admin, "/month");
         var text = _app.LastTo(Admin);
-        Assert.StartsWith("<b>สรุปรอบเงินเดือน (25 ต.ค. – 21 พ.ย. 2026)</b>", text);
-        Assert.Contains("<b>รายรับ</b> +26,000 บาท", text);
+        Assert.StartsWith("<b>สรุปยอดเดือนนี้ (25 ต.ค. – 21 พ.ย. 2026)</b>", text);
+        Assert.Contains("<b>รายรับ</b> 26,000 บาท", text);
     }
 
     [Fact]
@@ -500,7 +500,7 @@ public class UpdateHandlerTests
         Assert.Equal("ผู้ดูแลคืนสิทธิ์ใช้งานแล้ว พิมพ์ /help เพื่อดูวิธีใช้", _app.LastTo(Mom));
 
         await _app.Send(Mom, "ข้าว 60");
-        Assert.StartsWith("🔴\n#1 รายการจ่าย\nข้าว : 60 บาท", _app.LastTo(Mom));
+        Assert.StartsWith("🔴 รายการจ่าย\nข้าว : 60 บาท", _app.LastTo(Mom));
 
         await _app.Send(Admin, "/unblock 2002");
         Assert.Equal("คุณ2002 (@user2002) ไม่ได้ถูกระงับ", _app.LastTo(Admin));
@@ -574,7 +574,7 @@ public class UpdateHandlerTests
         Assert.Equal(600m, t.Amount);
         Assert.Equal(1, t.Seq);
         Assert.Equal("ซื้อข้าวกลางวัน 600", t.RawText);
-        Assert.Equal("แก้แล้ว\n🔴\n#1 รายการจ่าย\nซื้อข้าวกลางวัน : 600 บาท", _app.LastTo(Admin));
+        Assert.Equal("แก้ไขแล้ว\n🔴 รายการจ่าย\nซื้อข้าวกลางวัน : 600 บาท", _app.LastTo(Admin));
     }
 
     [Fact]
@@ -584,7 +584,7 @@ public class UpdateHandlerTests
         await _app.Edit(Admin, 10, "ข้าว");
 
         Assert.Equal(60m, _app.Transactions.Items.Single().Amount);
-        Assert.Equal("แก้ไม่สำเร็จ: ไม่พบจำนวนเงินในข้อความใหม่ รายการเดิมยังอยู่\n🔴\n#1 รายการจ่าย\nข้าว : 60 บาท",
+        Assert.Equal("แก้ไม่สำเร็จ: ไม่พบจำนวนเงินในข้อความใหม่ รายการเดิมยังอยู่\n🔴 รายการจ่าย\nข้าว : 60 บาท",
             _app.LastTo(Admin));
     }
 
@@ -594,7 +594,7 @@ public class UpdateHandlerTests
         await _app.Send(Admin, "ข้าว", messageId: 10);
         await _app.Edit(Admin, 10, "ข้าว 60");
 
-        Assert.Equal("🔴\n#1 รายการจ่าย\nข้าว : 60 บาท", _app.LastTo(Admin));
+        Assert.Equal("🔴 รายการจ่าย\nข้าว : 60 บาท", _app.LastTo(Admin));
     }
 
     [Fact]

@@ -25,10 +25,9 @@ public sealed class TransactionFormatter(ICategoryProvider categories)
     // ---------- Transactions ----------
 
     /// <summary>
-    /// Three lines, no category (categories only show in summaries):
+    /// Two lines, no category (categories only show in summaries):
     /// <code>
-    /// 🔴
-    /// #42 รายการจ่าย
+    /// 🔴 รายการจ่าย
     /// ซื้อข้าวกลางวัน : 60 บาท
     /// </code>
     /// </summary>
@@ -40,7 +39,7 @@ public sealed class TransactionFormatter(ICategoryProvider categories)
         var amount = $"{FormatAmount(tx.Amount)} บาท";
         var detail = string.IsNullOrWhiteSpace(tx.Description) ? amount : $"{Escape(tx.Description)} : {amount}";
 
-        return $"{dot}\n#{tx.Seq} {label}\n{detail}";
+        return $"{dot} {label}\n{detail}";
     }
 
     public string Deleted(Transaction tx) => $"ลบแล้ว\n{Format(tx)}";
@@ -66,12 +65,12 @@ public sealed class TransactionFormatter(ICategoryProvider categories)
     public string NothingToUndo() => "ยังไม่มีรายการให้ลบ";
 
     public string ClearConfirm(string confirmWord) =>
-        $"คำสั่งนี้จะลบรายการทั้งหมดของคุณ และเริ่มนับ # ใหม่ที่ #1\nถ้าแน่ใจ พิมพ์ /clear {confirmWord}";
+        $"คำสั่งนี้จะลบรายการทั้งหมดของคุณ\nถ้าแน่ใจ พิมพ์ /clear {confirmWord}";
 
     public string Cleared(long count) =>
         count == 0
             ? "ไม่มีรายการให้ลบ"
-            : $"ลบแล้ว {count:#,##0} รายการ รายการถัดไปจะเริ่มที่ #1";
+            : $"ลบแล้ว {count:#,##0} รายการ";
 
     // ---------- Summary ----------
 
@@ -101,12 +100,12 @@ public sealed class TransactionFormatter(ICategoryProvider categories)
     private void AppendTotals(StringBuilder sb, SummaryReport report)
     {
 
-        AppendSection(sb, report, TransactionType.Income, "รายรับ", "+");
+        AppendSection(sb, report, TransactionType.Income, "รายรับ", "");
         AppendSection(sb, report, TransactionType.Expense, "รายจ่าย", "-");
 
         var balance = report.Balance;
         var dot = balance >= 0 ? "🟢" : "🔴";
-        var sign = balance > 0 ? "+" : balance < 0 ? "-" : "";
+        var sign = balance < 0 ? "-" : "";
         sb.Append($"\n\n{dot} <b>คงเหลือ</b> {sign}{FormatAmount(balance)} บาท");
     }
 
@@ -163,7 +162,7 @@ public sealed class TransactionFormatter(ICategoryProvider categories)
         sb.Append("ถ้ายังไม่เคยบันทึกเงินเดือน จะสรุปตามเดือนปฏิทินแทน\n");
         sb.Append("/list 10 รายการล่าสุด\n");
         sb.Append("/undo ลบรายการล่าสุด (ใช้เมื่อกรอกผิด)\n");
-        sb.Append("/clear ลบรายการทั้งหมด แล้วเริ่มนับ #1 ใหม่\n");
+        sb.Append("/clear ลบรายการทั้งหมด\n");
         sb.Append("/help วิธีใช้\n");
 
         if (isAdmin)

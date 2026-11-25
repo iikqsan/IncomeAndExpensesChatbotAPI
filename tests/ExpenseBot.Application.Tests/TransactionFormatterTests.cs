@@ -32,14 +32,14 @@ public class TransactionFormatterTests
     public void Expense()
     {
         var text = _formatter.Format(Tx(TransactionType.Expense, 60m, "ซื้อข้าวกลางวัน", "food"));
-        Assert.Equal("🔴\n#42 รายการจ่าย\nซื้อข้าวกลางวัน : 60 บาท", text);
+        Assert.Equal("🔴 รายการจ่าย\nซื้อข้าวกลางวัน : 60 บาท", text);
     }
 
     [Fact]
     public void Income_with_thousands()
     {
         var text = _formatter.Format(Tx(TransactionType.Income, 25000m, "เงินเดือนพฤศจิกายน", "salary", seq: 43));
-        Assert.Equal("🟢\n#43 รายการรับ\nเงินเดือนพฤศจิกายน : 25,000 บาท", text);
+        Assert.Equal("🟢 รายการรับ\nเงินเดือนพฤศจิกายน : 25,000 บาท", text);
     }
 
     [Theory]
@@ -59,36 +59,36 @@ public class TransactionFormatterTests
     public void Decimal_amount_in_line()
     {
         var text = _formatter.Format(Tx(TransactionType.Expense, 45.50m, "กาแฟ", "food"));
-        Assert.Equal("🔴\n#42 รายการจ่าย\nกาแฟ : 45.50 บาท", text);
+        Assert.Equal("🔴 รายการจ่าย\nกาแฟ : 45.50 บาท", text);
     }
 
     [Fact]
     public void Escapes_html_in_description()
     {
         var text = _formatter.Format(Tx(TransactionType.Expense, 10m, "<b>ข้าว</b> & น้ำ", "weird"));
-        Assert.Equal("🔴\n#42 รายการจ่าย\n&lt;b&gt;ข้าว&lt;/b&gt; &amp; น้ำ : 10 บาท", text);
+        Assert.Equal("🔴 รายการจ่าย\n&lt;b&gt;ข้าว&lt;/b&gt; &amp; น้ำ : 10 บาท", text);
     }
 
     [Fact]
     public void Category_is_not_shown()
     {
         var text = _formatter.Format(Tx(TransactionType.Expense, 5m, "x", "missing"));
-        Assert.Equal("🔴\n#42 รายการจ่าย\nx : 5 บาท", text);
+        Assert.Equal("🔴 รายการจ่าย\nx : 5 บาท", text);
     }
 
     [Fact]
     public void Empty_description_shows_only_the_amount()
     {
         var text = _formatter.Format(Tx(TransactionType.Expense, 60m, "", DefaultCategories.ExpenseOther));
-        Assert.Equal("🔴\n#42 รายการจ่าย\n60 บาท", text);
+        Assert.Equal("🔴 รายการจ่าย\n60 บาท", text);
     }
 
     [Fact]
     public void Deleted_and_edited_prefixes()
     {
         var tx = Tx(TransactionType.Expense, 600m, "ซื้อข้าวกลางวัน", "food");
-        Assert.Equal("ลบแล้ว\n🔴\n#42 รายการจ่าย\nซื้อข้าวกลางวัน : 600 บาท", _formatter.Deleted(tx));
-        Assert.Equal("แก้แล้ว\n🔴\n#42 รายการจ่าย\nซื้อข้าวกลางวัน : 600 บาท", _formatter.Edited(tx));
+        Assert.Equal("ลบแล้ว\n🔴 รายการจ่าย\nซื้อข้าวกลางวัน : 600 บาท", _formatter.Deleted(tx));
+        Assert.Equal("แก้ไขแล้ว\n🔴 รายการจ่าย\nซื้อข้าวกลางวัน : 600 บาท", _formatter.Edited(tx));
     }
 
     [Fact]
@@ -104,10 +104,10 @@ public class TransactionFormatterTests
         ]);
 
         Assert.Equal(
-            "<b>สรุปวันนี้ (21 พ.ย. 2026)</b>\n\n" +
-            "<b>รายรับ</b> +25,000 บาท\n• เงินเดือน +25,000\n\n" +
+            "<b>สรุปยอดวันนี้ (21 พ.ย. 2026)</b>\n\n" +
+            "<b>รายรับ</b> 25,000 บาท\n• เงินเดือน 25,000\n\n" +
             "<b>รายจ่าย</b> -1,180.50 บาท\n• อาหาร -180\n• A&amp;B &lt;x&gt; -1,000.50\n\n" +
-            "🟢 <b>คงเหลือ</b> +23,819.50 บาท",
+            "🟢 <b>คงเหลือ</b> 23,819.50 บาท",
             _formatter.Summary(report));
     }
 
