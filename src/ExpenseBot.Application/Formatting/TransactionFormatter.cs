@@ -79,7 +79,12 @@ public sealed class TransactionFormatter(ICategoryProvider categories)
         var sb = new StringBuilder($"<b>{PeriodTitle(report.Period)}</b>");
 
         if (report.Lines.Count == 0)
-            return sb.Append("\nยังไม่มีรายการ").ToString();
+        {
+            sb.Append("\nยังไม่มีรายการ");
+            if (report.RemainingBalance is not null)
+                AppendBalance(sb, report.Balance);
+            return sb.ToString();
+        }
 
         AppendTotals(sb, report);
         return sb.ToString();
@@ -99,11 +104,15 @@ public sealed class TransactionFormatter(ICategoryProvider categories)
 
     private void AppendTotals(StringBuilder sb, SummaryReport report)
     {
-
-        AppendSection(sb, report, TransactionType.Income, "รายรับ", "");
+        // /today and /week carry the cycle balance, so a period without income just skips that section.
+        if (report.RemainingBalance is null || report.Income > 0)
+            AppendSection(sb, report, TransactionType.Income, "รายรับ", "");
         AppendSection(sb, report, TransactionType.Expense, "รายจ่าย", "-");
+        AppendBalance(sb, report.Balance);
+    }
 
-        var balance = report.Balance;
+    private static void AppendBalance(StringBuilder sb, decimal balance)
+    {
         var dot = balance >= 0 ? "🟢" : "🔴";
         var sign = balance < 0 ? "-" : "";
         sb.Append($"\n\n{dot} <b>คงเหลือ</b> {sign}{FormatAmount(balance)} บาท");

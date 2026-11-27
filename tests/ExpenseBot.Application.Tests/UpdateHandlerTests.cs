@@ -384,14 +384,14 @@ public class UpdateHandlerTests
 
         await _app.Send(Admin, "/month");
         var admin = _app.LastTo(Admin);
-        Assert.StartsWith("<b>สรุปยอดเดือนนี้ (25 ต.ค. – 21 พ.ย. 2026)</b>", admin);
+        Assert.StartsWith("<b>สรุปยอดเดือนนี้ (25 ต.ค. – 24 พ.ย. 2026)</b>", admin);
         Assert.Contains("<b>รายรับ</b> 20,000 บาท", admin);
         Assert.Contains("<b>รายจ่าย</b> -560 บาท", admin);
         Assert.DoesNotContain("เดือนปฏิทิน", admin);
 
         await _app.Send(Mom, "/month");
         var mom = _app.LastTo(Mom);
-        Assert.StartsWith("<b>สรุปยอดเดือนนี้ (31 ต.ค. – 21 พ.ย. 2026)</b>", mom);
+        Assert.StartsWith("<b>สรุปยอดเดือนนี้ (31 ต.ค. – 29 พ.ย. 2026)</b>", mom);
         Assert.Contains("<b>รายจ่าย</b> 0 บาท", mom);
     }
 
@@ -412,8 +412,65 @@ public class UpdateHandlerTests
 
         await _app.Send(Admin, "/month");
         var current = _app.LastTo(Admin);
-        Assert.StartsWith("<b>สรุปยอดเดือนนี้ (25 พ.ย. – 3 ธ.ค. 2026)</b>", current);
+        Assert.StartsWith("<b>สรุปยอดเดือนนี้ (25 พ.ย. – 24 ธ.ค. 2026)</b>", current);
         Assert.Contains("<b>รายจ่าย</b> -80 บาท", current);
+    }
+
+    [Fact]
+    public async Task Today_shows_what_is_left_of_the_pay_cycle_and_hides_empty_income()
+    {
+        await _app.Send(Admin, "รับเงินเดือน 3,010", dateUtc: Noon(11, 1));
+        await _app.Send(Admin, "ข้าว 10", dateUtc: Noon(11, 20));   // earlier in the cycle
+        await _app.Send(Admin, "ข้าว 10");                          // today, 21 Nov
+
+        await _app.Send(Admin, "/today");
+        var text = _app.LastTo(Admin);
+        Assert.Equal(
+            "<b>สรุปยอดวันนี้ (21 พ.ย. 2026)</b>\n\n" +
+            "<b>รายจ่าย</b> -10 บาท\n• อาหาร -10\n\n" +
+            "🟢 <b>คงเหลือ</b> 2,990 บาท",
+            text);
+    }
+
+    [Fact]
+    public async Task Today_without_transactions_still_shows_the_remaining_balance()
+    {
+        await _app.Send(Admin, "รับเงินเดือน 3000", dateUtc: Noon(11, 1));
+
+        await _app.Send(Admin, "/today");
+        Assert.Equal("<b>สรุปยอดวันนี้ (21 พ.ย. 2026)</b>\nยังไม่มีรายการ\n\n🟢 <b>คงเหลือ</b> 3,000 บาท",
+            _app.LastTo(Admin));
+    }
+
+    [Fact]
+    public async Task Week_shows_salary_only_in_the_week_it_was_recorded()
+    {
+        await _app.Send(Admin, "รับเงินเดือน 3000", dateUtc: Noon(11, 17));
+        await _app.Send(Admin, "ข้าว 100", dateUtc: Noon(11, 18));
+
+        await _app.Send(Admin, "/week");
+        var payWeek = _app.LastTo(Admin);
+        Assert.Contains("<b>รายรับ</b> 3,000 บาท", payWeek);
+        Assert.EndsWith("🟢 <b>คงเหลือ</b> 2,900 บาท", payWeek);
+
+        _app.Clock.Now = new DateTimeOffset(2026, 11, 25, 5, 0, 0, TimeSpan.Zero); // the following week
+        await _app.Send(Admin, "ข้าว 50");
+
+        await _app.Send(Admin, "/week");
+        var nextWeek = _app.LastTo(Admin);
+        Assert.DoesNotContain("รายรับ", nextWeek);
+        Assert.Contains("<b>รายจ่าย</b> -50 บาท", nextWeek);
+        Assert.EndsWith("🟢 <b>คงเหลือ</b> 2,850 บาท", nextWeek);
+    }
+
+    [Fact]
+    public async Task Late_salary_stretches_the_current_cycle_up_to_today()
+    {
+        _app.Clock.Now = new DateTimeOffset(2026, 11, 27, 5, 0, 0, TimeSpan.Zero);
+        await _app.Send(Admin, "รับเงินเดือน 20000", dateUtc: Noon(10, 25));
+
+        await _app.Send(Admin, "/month");
+        Assert.StartsWith("<b>สรุปยอดเดือนนี้ (25 ต.ค. – 27 พ.ย. 2026)</b>", _app.LastTo(Admin));
     }
 
     [Fact]
@@ -425,7 +482,7 @@ public class UpdateHandlerTests
 
         await _app.Send(Admin, "/month");
         var text = _app.LastTo(Admin);
-        Assert.StartsWith("<b>สรุปยอดเดือนนี้ (25 ต.ค. – 21 พ.ย. 2026)</b>", text);
+        Assert.StartsWith("<b>สรุปยอดเดือนนี้ (25 ต.ค. – 24 พ.ย. 2026)</b>", text);
         Assert.Contains("<b>รายรับ</b> 26,000 บาท", text);
     }
 

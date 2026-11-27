@@ -79,7 +79,7 @@ public class SummaryTests
 
         Assert.Equal(60m, report.Expense);
         Assert.Equal(1000m, report.Income);
-        Assert.Equal(940m, report.Balance);
+        Assert.Equal(900m, report.Balance);   // no payday yet: calendar-month balance (1000 - 60 - 40)
     }
 
     // ---------- Pay cycles ----------
@@ -94,10 +94,24 @@ public class SummaryTests
     }
 
     [Fact]
-    public void Current_cycle_runs_from_salary_to_today()
+    public void Current_cycle_runs_from_salary_to_the_day_before_next_expected_salary()
     {
         var cycle = PayCycles.Current([D(10, 31)], today: D(11, 22));
-        Assert.Equal(new PayCycle(D(10, 31), D(11, 22), IsOngoing: true), cycle);
+        Assert.Equal(new PayCycle(D(10, 31), D(11, 29), IsOngoing: true), cycle);
+    }
+
+    [Theory]
+    [InlineData(2026, 11, 25, 2026, 12, 24)]  // fixed payday: day before the 25th
+    [InlineData(2026, 10, 31, 2026, 11, 29)]  // month end → next is 30 Nov
+    [InlineData(2026, 11, 30, 2026, 12, 30)]  // month end → next is 31 Dec
+    [InlineData(2026, 12, 31, 2027, 1, 30)]   // month end → next is 31 Jan
+    [InlineData(2027, 1, 31, 2027, 2, 27)]    // month end → next is 28 Feb
+    [InlineData(2027, 2, 28, 2027, 3, 30)]    // month end → next is 31 Mar
+    [InlineData(2026, 10, 30, 2026, 11, 29)]  // 30 Oct is not month end → next is 30 Nov
+    [InlineData(2027, 1, 30, 2027, 2, 27)]    // 30 Jan → clamped to 28 Feb
+    public void Expected_cycle_end_follows_the_real_calendar(int y, int m, int d, int ey, int em, int ed)
+    {
+        Assert.Equal(new DateOnly(ey, em, ed), PayCycles.ExpectedLastDay(new DateOnly(y, m, d)));
     }
 
     [Fact]
